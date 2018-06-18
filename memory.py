@@ -45,7 +45,7 @@ class Memory():
         #addresses of subcategories of header
         #byte address to initialize program counter
         #index of 'memory' where first routine instruction is stored
-        self.program_counter = self.get_pc()
+        self.pc = self.get_pc_start()
         
         #index of 'memory' where abbreviation table is stored
         self.abbrev_table = self.get_abbrev()
@@ -134,6 +134,9 @@ class Memory():
         return high
     
     def get_pc(self):
+        return self.pc
+
+    def get_pc_start(self):
         address = self.help.pc_add
         if self.ver_num != 6:
             return self.get_byte_address(self.memory[address:address + 2])
@@ -164,7 +167,7 @@ class Memory():
     
     #converts list of hexadecimal numbers(2 bytes/elems long) to base- 10 integer
     def get_num(self, hexa, signed=False):
-        #converts hexa list to int
+        #converts hexa list to int        
         hexanum = b''.join(hexa)
         num = self.get_int(hexanum)
 
@@ -232,11 +235,11 @@ class Memory():
     #is not defined apriori
     def get_string(self, address):
         zlist = []
-        memadd = address
+        self.pc = address
         
         while True:
             #convert 2 byte hexa to list containing 3 zchars and 1 bit (of type int)
-            hexa = self.memory[memadd:memadd + 2]
+            hexa = self.memory[self.pc:self.pc + 2]
             zword = self.get_zscii(hexa)
             
             #appends all zchars to zlist
@@ -244,11 +247,11 @@ class Memory():
                 zlist.append(zword[i])
               
             #checks for terminating condition
-            if zword[0] == 1 or (memadd + 2) > len(self.memory):
+            if zword[0] == 1 or (self.pc + 2) > len(self.memory):
                 break
             
             #increments memory address
-            memadd += 2
+            self.pc += 2
         
         
         charlist = []
@@ -319,13 +322,8 @@ class Memory():
 # =============================================================================
     #takes in 'memory' index as argument since the length of an instruction
     #is not defined apriori
-    #instr arg is a Instruction object (refer to helper.py)
-    #types of operands, operands
-    #returns the program counter
     #note: python passes args by assignment so mutable variables can be changed
     #inside the function
-    #HOW TO PASS PROGRAM COUNTER IN BY REFERENCE?
-    #MAKE AN INSTR CLASS CONTAINING 5 ELEMS AND THE PROGRAM COUNTER?
     def get_instr(self, pc):
         #an instruction contains a format type, op count, opcode number,
         #types of operands, operands, arguments specifying return addresses
@@ -340,65 +338,54 @@ class Memory():
         #extended
         #0xbe     xxxxxxxx tttttttt
                 
+        self.pc = pc
+
         #format is contained within 1 byte of instruction
-        byte = self.memory[pc]
-        #UNDO
-        #print('byte ' + str(byte))
-        
+        byte = self.memory[self.pc]
 
         #gets format: 0:long, 1:short, 2:variable, 3:extended
         form = self.get_format(byte)
-        #UNDO
-        #print('form ' + str(form))
-        
 
         #gets opcode
         #if format is extended, the op num is in the 2nd byte
         if form == 3:
-            pc += 1
-            byte = self.memory[pc]
+            self.pc += 1
+            byte = self.memory[self.pc]
         
         #get opcode number of opcode in int
         op_num = self.get_op_num(byte, form)
-        #UNDO
-        #print('op_num ' + str(op_num))
-
         
         #it is an error for a variable instr with 2op code to not have 2 operands
         #unless it is op_code: 2op:1 (CHECK not accounted for)
         #get operand count of opcode: 0:0OP, 1:1OP, 2:2OP or 3:VAR
         op_count = self.get_op_count(byte, form)
-        #UNDO
-        #print('op_count ' + str(op_count))
-
 
         #get sequence of bytes indicating types of operands
         #if format is long or short, operand types are in 1st byte
         #if format is var, operand types are in 2nd byte (next byte)
         #if extended, operand types are in 3rd byte(next byte)
         if form == 0 or form == 1:
-            pc += 0
+            pass
         elif form == 2 or form == 3:
-            pc += 1
+            self.pc += 1
 
-        type_seq_add = pc
+        type_seq_add = self.pc
             
         #get operand types
         #there are 2 double variable instructions, where type_seq is of 2 bytes
         #op_code var:1a and op_code var:c 
-        #get_types was changed (double == True)
         types = []
         if (op_num == self.get_int(b'\x1a') or \
            op_num == self.get_int(b'\x0c')) and op_count == 3:
             
             type_seq = self.memory[type_seq_add: type_seq_add + 2]
             types = self.get_types(type_seq, form, double=True)
-            pc += 2
+            self.pc += 2
 
         else:
             type_seq = self.memory[type_seq_add]            
             types = self.get_types(type_seq, form)
-            pc += 1
+            self.pc += 1
         
         
         #get the next sequences of bits representing operands
@@ -406,16 +393,13 @@ class Memory():
         #if form is 2 the operands start from the 3rd byte
         #if form is 3 the operands start from the 4th byte
         #all start on the next byte (already incremented)
-        op_start = pc
+        op_start = self.pc
         
         #CHECK
         
         #get operands - pass in address because the length is not determined apriori?
-        #what does each type represent? determined by the function
-        #returns pc
-        operands = []
-        pc = self.get_operands(op_start, types, operands)
-        
+        operands = self.get_operands(op_start, types)
+
         #error catching
         #if op_count is 0 - 2, number of elems in types and operands == op_count
         if op_count in range(0, 3):
@@ -424,7 +408,6 @@ class Memory():
             assert (op_count == len(operands)), 'Number of operands does not \
                                                 equal op count (0OP, 1OP, 2OP)'
 
-        #instr requires 3 args to be (re?)initiated (is this permanent after the function terminates?):
         #KIND(deduced from form, op count), op num
         #KIND(0:0OP, 1:1OP, 2:2OP, 3:VAR, 4:EXT)
         kind = 0
@@ -432,24 +415,104 @@ class Memory():
             kind = 4
         else:
             kind = op_count
-            
-        instr = Instruction(self.ver_num, kind, op_num)
-        
-        #should map instruction to function after this (done automatically in
-        #Instruction class)
-        #check for args and read them in, also perform conversion into types in memory
-        #Instruction should contain kind, op_num, operands (converted into data types)
-        #there has to be a better way to do this - the attributes of Instruction obj
-        #depend on methods in Memory
-        #alternatively, view it as all mapping is performed in helper and data conversion in memory
-        
-        
-        #check_add() in Instruction - pass in instruction obj and modify accordingly
-        #check_add() requires reading from memory
-        #pass instr obj into function
-        #execute() in interpreter (but execution might require reading from memory?)
-        
-        return [pc, instr]
+                    
+        # maps instruction to kind and op_num
+        instr_details = self.help.op_table[kind][op_num] # instr_details is of type dict
+        # UNDO
+        print('kind: ' + str(kind) + ', opnum: ' + str(op_num))
+        print('instr_details: ' + str(instr_details))
+
+        # reads in other data and initializes Instruction obj containing decoded arguments and function reference
+        # if multiple arguments are specified, which one is read first?
+        str_arg = None
+        res_arg = None
+        br_arg = None
+        is_reversed = False
+        offset = 0
+        if instr_details["is_str"] == True:
+            charlist = self.get_string(self.pc)
+
+        elif instr_details["is_res"] == True:
+            # decode byte variable number
+            byte = self.memory[self.pc]
+            res_arg = self.get_int(byte)
+            self.pc += 1
+            # 0: on top of the routine stack
+            # 1-15: the local variable
+            # 16-255: global variable of that num - 16
+
+        if instr_details["is_br"] == True:
+            # the branch argument is always the last of the sequence of arguments
+            # checks bit 6 to see if branch arg is 1 or 2 bytes
+            byte = self.memory[self.pc]
+            int_byte = self.get_int(byte)
+            # gets bit 6
+            six = (int_byte >> 3 << 1) - (int_byte >> 2)
+            seven = (int_byte >> 2 << 1) - (int_byte >> 1)
+            # checks if reverse logic
+            is_reversed = True if seven == 0 else False
+            is_one = True if (six == 1) else False
+            br_arg_byte = self.memory[self.pc] if is_one else self.memory[self.pc: self.pc + 2]
+            br_arg = self.get_int(br_arg_byte)
+            # gets offset
+            offset = (br_arg - (br_arg >> 6 << 6)) if is_one else (br_arg - (br_arg >> 14 << 14))
+            self.pc = self.pc + 1 if is_one else self.pc + 2
+
+        # CHECK
+        # replace types list?
+        arg_types = instr_details["types"]
+        if arg_types != []:
+            for i in range(len(operands)):
+                argt = arg_types[i]
+                op = operands[i]
+                # UNDO
+                # print("op: " + str(op))
+                if argt == "s" or argt == "t":
+                    op = self.get_num(op, signed=True)
+
+                elif argt == "bit":
+                    op = self.get_int(op)
+
+                elif argt == "byte":
+                    op = self.get_int(op)
+
+                elif argt == "var":
+                    op = self.get_int(op)
+
+                elif argt == "baddr":
+                    #CHECK - if op is a single byte and not a list?
+                    op = self.get_byte_address([op])
+
+                elif argt == "raddr":
+                    op = self.get_packed_address(op, is_routine_call=True)
+
+                elif argt == "saddr":
+                    op = self.get_packed_address(op, is_print_paddr=True)
+
+                elif argt == "obj":
+                    pass
+
+                elif argt == "attr":
+                    pass
+
+                elif argt == "prop":
+                    pass
+
+                elif argt == "window":
+                    pass
+
+                elif argt == "time":
+                    pass
+
+                elif argt == "pic":
+                    pass
+
+        # initializes instr obj with values/args
+        # types may not be necessary for execution
+        name = instr_details['name']
+        instr = Instruction(name, operands, str_arg, res_arg, br_arg, is_reversed, offset)
+
+        return instr
         
     #gets format of opcode and returns the corresponding int
     def get_format(self, byte):
@@ -479,8 +542,6 @@ class Memory():
     def get_op_count(self, byte, form):
         #converts from byte to int
         int_byte = self.get_int(byte)
-        #UNDO
-        #print('int_byte ' + str(int_byte))
         
         if form == 0:
             #long
@@ -537,35 +598,34 @@ class Memory():
             return int_byte
         
     #gets operands by returning a list
-    def get_operands(self, op_start, types, operands):
-        cur = op_start
+    def get_operands(self, op_start, types):
+        self.pc = op_start
+        operands = []
         byte_operand = []
         
         for args in types:
             if args == 0:
                 #large - 2 bytes
-                byte_operand = self.memory[cur:cur + 2]
-                cur += 2
+                byte_operand = self.memory[self.pc:self.pc + 2]
+                self.pc += 2
                 
             elif args == 1 or args == 2:
                 #small and variable - 1 byte
-                byte_operand = self.memory[cur]
-                cur += 1           
+                byte_operand = self.memory[self.pc]
+                self.pc += 1           
                 
             #operand is a byte list
             #CHECK IM NOT SURE BUT just append as is
             #operands should be a nested list
             operands.append(byte_operand)
 
-        return cur        
+        return operands
         
     #gets operand types:0:large(2 bytes), 1:small(1 byte),
     #2:variable(1 byte), 3:omitted(0 bytes and not appended)
     def get_types(self, type_seq, form, double=False):
         #converts from byte to int
         int_type_seq = self.get_int(type_seq)
-        #UNDO
-        #print('int_type_seq ' + str(int_type_seq))
         
         #gets operand types and returns a list
         types = []
@@ -614,8 +674,6 @@ class Memory():
             for i in range(n, -2, -2):
                 temp = (int_type_seq >> i) - (int_type_seq >> (i + 2) << 2 )
                 bitlist.append(temp)
-            #UNDO
-            #print('bitlist ' + str(bitlist))
             
             for bits in bitlist:
                 #it is an error if an omitted type occurs before a non omitted type
