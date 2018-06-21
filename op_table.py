@@ -150,8 +150,8 @@ def make_table(ver_num):
     
     #VAR
     ops(op_table,     3, 0,  'call_fv',        is_res=True,             types=["raddr", "u", "u", "u"])    
-    ops(op_table,     3, 1,  'store_w',                                 types=["baddr", "u", "u"])    
-    ops(op_table,     3, 2,  'store_b',                                 types=["baddr", "u", "byte"])    
+    ops(op_table,     3, 1,  'storew',                                 types=["baddr", "u", "u"])    
+    ops(op_table,     3, 2,  'storeb',                                 types=["baddr", "u", "byte"])    
     ops(op_table,     3, 3,  'put_prop',                                types=["obj", "prop", "u"])    
     
     if ver_num in [1, 2, 3]:

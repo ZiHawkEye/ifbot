@@ -40,7 +40,8 @@ class Interpreter():
         self.routine_call_state = 0
 
         # start to execute instructions
-        for i in range(9):
+        # issue with dectets, abbrev?
+        for i in range(3):
             # gets instr details 
             instr = self.memory.get_instr(self.program_counter)
             # executes
@@ -86,7 +87,7 @@ file = open(file_name, "rb")
 #checks attributes of Memory
 machine = Interpreter(file)
 
-# mem = machine.memory.get_memory()
+mem = machine.memory.get_memory()
 
 # =============================================================================
 # #tests memory and its segments
@@ -98,7 +99,7 @@ machine = Interpreter(file)
 # =============================================================================
 # #tests the get string function
 # abbrev_add = machine.help.abbrev_add
-# for i in range(1):
+# for i in range(60):
 #     offset = i*2
 #     abbrev_table_add = machine.memory.get_byte_address(mem[abbrev_add:abbrev_add + 2])
 #     #print('abbrev_table_add ' + str(abbrev_table_add))
@@ -106,11 +107,8 @@ machine = Interpreter(file)
 #                                                          + offset:abbrev_table_add
 #                                                          + offset + 2])
 #     #print('abbrev_string_location ' + str(abbrev_string_location))
-#     #print('get_string')
-#     abbrev_result = machine.memory.get_string(abbrev_string_location)
-#     abbrev_list = abbrev_result['charlist']
-#     #print('abbrev_list ' + str(abbrev_list))
-#     abbrev_string = ''.join(abbrev_list)
+
+#     abbrev_string = machine.memory.get_string(abbrev_string_location)
 #     print(abbrev_string)
 # =============================================================================
 

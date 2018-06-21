@@ -185,7 +185,6 @@ class Memory():
 # =============================================================================
     #converts 2 byte list of hexa char into 1x 1 bit int and 3 5 bit ints
     def get_zscii(self, hexa):
-        #probably a more efficient way to do this
         #converts hexa to int
         intchar = self.get_num(hexa)
         
@@ -253,6 +252,8 @@ class Memory():
             #increments memory address
             self.pc += 2
         
+        # # UNDO
+        # print('zlist: ' + str(zlist))
         
         charlist = []
         #converts zlist ints to chars
@@ -291,17 +292,17 @@ class Memory():
                 i += 1#will increment one more after the loop ends                
                                 
                 #gets the index where word address to abbreviation is stored
-                word_address_index = self.abbrev_table + (a - 1) * 32 + b
+                wa_index = self.abbrev_table + (a - 1) * 32 + b
                 
                 #gets the word address where abbreviation is stored
                 #and converts it to index in 'memory'
-                word_address = self.get_word_address(
-                        self.memory[word_address_index:word_address_index + 2])
+                word_address = self.get_word_address(self.memory[wa_index:wa_index + 2])
                 
                 #finds the z string and appends it to charlist
                 temp = self.get_string(word_address)#CHECK IM NOT SURE
-                for word in temp:
-                    charlist.append(word)
+                # UNDO
+                print("abbrev: " + temp)
+                charlist.append(word)
             
             else:
                 #CHECK IM NOT SURE
@@ -313,7 +314,10 @@ class Memory():
                 #CHECK not sure if this step is correct
                 shift = 0
         
-        return charlist
+        zstr = ''.join(charlist)
+        # UNDO
+        print(zstr)
+        return zstr
 
 
 
@@ -351,6 +355,7 @@ class Memory():
         if form == 3:
             self.pc += 1
             byte = self.memory[self.pc]
+            assert (self.pc - pc == 1), "Wrong byte for op num in extended format"
         
         #get opcode number of opcode in int
         op_num = self.get_op_num(byte, form)
@@ -365,28 +370,41 @@ class Memory():
         #if format is var, operand types are in 2nd byte (next byte)
         #if extended, operand types are in 3rd byte(next byte)
         if form == 0 or form == 1:
-            pass
+            assert (self.pc - pc == 0), "Wrong byte for types in long/short format"
         elif form == 2 or form == 3:
             self.pc += 1
+            if form == 2:
+                assert (self.pc - pc == 1), "Wrong byte for types in variable format"
+            elif form == 3:
+                assert (self.pc - pc == 2), "Wrong byte for types in extended format"
 
         type_seq_add = self.pc
             
         #get operand types
         #there are 2 double variable instructions, where type_seq is of 2 bytes
         #op_code var:1a and op_code var:c 
-        types = []
         if (op_num == self.get_int(b'\x1a') or \
            op_num == self.get_int(b'\x0c')) and op_count == 3:
-            
             type_seq = self.memory[type_seq_add: type_seq_add + 2]
             types = self.get_types(type_seq, form, double=True)
             self.pc += 2
+            assert (self.pc - pc == 4), "Wrong byte for operands in extended format, double variable instructions"
 
         else:
             type_seq = self.memory[type_seq_add]            
             types = self.get_types(type_seq, form)
             self.pc += 1
+            if form == 0 or form == 1:
+                assert (self.pc - pc == 1), "Wrong byte for operands in long/short format"
+            elif form == 2:
+                assert (self.pc - pc == 2), "Wrong byte for operands in variable format"
+            elif form == 3:
+                assert (self.pc - pc == 3), "Wrong byte for operands in extended format"
         
+        # UNDO
+        print("types: " + str(types))
+        print("op_count: " + str(op_count))
+        print("form: " + str(form))
         
         #get the next sequences of bits representing operands
         #if form is 0, 1 the operands start from the 2nd byte
@@ -447,8 +465,8 @@ class Memory():
             byte = self.memory[self.pc]
             int_byte = self.get_int(byte)
             # gets bit 6
-            six = (int_byte >> 3 << 1) - (int_byte >> 2)
-            seven = (int_byte >> 2 << 1) - (int_byte >> 1)
+            six = (int_byte >> 2) - (int_byte >> 3 << 1)
+            seven = (int_byte >> 1) - (int_byte >> 2 << 1)
             # checks if reverse logic
             is_reversed = True if seven == 0 else False
             is_one = True if (six == 1) else False
@@ -477,10 +495,10 @@ class Memory():
                     op = self.get_int(op)
 
                 elif argt == "var":
+                    assert (len(op) == 1), "Variable number operand is not 1 byte"
                     op = self.get_int(op)
 
                 elif argt == "baddr":
-                    #CHECK - if op is a single byte and not a list?
                     op = self.get_byte_address([op])
 
                 elif argt == "raddr":
@@ -585,12 +603,12 @@ class Memory():
         elif form == 1:
             #short
             #gets last 4 bits of op code
-            return (int_byte - (int_byte >> 4 << 4))
+            return int_byte - (int_byte >> 4 << 4)
             
         elif form == 2:
             #variable
             #returns the last 5 bits of the op code
-            return (int_byte - (int_byte >> 5 << 5)) 
+            return int_byte - (int_byte >> 5 << 5)
             
         elif form == 3:
             #extended
@@ -615,7 +633,6 @@ class Memory():
                 self.pc += 1           
                 
             #operand is a byte list
-            #CHECK IM NOT SURE BUT just append as is
             #operands should be a nested list
             operands.append(byte_operand)
 
@@ -626,7 +643,7 @@ class Memory():
     def get_types(self, type_seq, form, double=False):
         #converts from byte to int
         int_type_seq = self.get_int(type_seq)
-        
+
         #gets operand types and returns a list
         types = []
         if form == 0:
@@ -644,6 +661,8 @@ class Memory():
             three = bits - (bits >> 1 << 1)
             bitlist.append(three)
             
+            assert (bits == (two << 1) + three), "Error in getting bits to determine types for long format"
+
             for bit in bitlist:
                 if bit == 0:
                     #small
@@ -666,14 +685,19 @@ class Memory():
             bitlist = []
             #if double variable
             if double == True:
-                n = 14
+                n = 16 #bits
             else:
-                n = 6
+                n = 8 #bits
             
             #splits byte seq into 2 bit sequences
-            for i in range(n, -2, -2):
+            for i in range(n - 2, -2, -2):
                 temp = (int_type_seq >> i) - (int_type_seq >> (i + 2) << 2 )
                 bitlist.append(temp)
+
+            temp = 0
+            for i in range(len(bitlist)):
+                temp += bitlist[i] << n - 2 - i*2
+            assert temp == int_type_seq, "Error in splitting bits to determine types for variable/extended format"
             
             for bits in bitlist:
                 #it is an error if an omitted type occurs before a non omitted type
@@ -689,7 +713,8 @@ class Memory():
 # Memory Addresses    
 # =============================================================================
     #converts byte address list(2 bytes/elems long) to index in 'memory'
-    def get_byte_address(self, byte_list): 
+    def get_byte_address(self, byte_list):
+        assert (len(byte_list) == 2), "Byte address " +  str(byte_list) + " is not 16 bits" 
         index = self.get_num(byte_list)
         return index
     
@@ -702,7 +727,6 @@ class Memory():
     def get_packed_address(self, packed_list, is_routine_call = False, 
                            is_print_paddr = False):
         pindex = self.get_byte_address(packed_list)
-        
         
         vn = self.ver_num
         if vn == 1 or vn == 2 or vn == 3:

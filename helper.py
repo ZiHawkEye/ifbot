@@ -80,6 +80,7 @@ class Helper():
                 
     #shift to punctuation
     def check_punct(self, zchar, shift):
+        # CHECK AGAIN
         if self.ver_num in [1, 2]:
             if zchar in [2, 3, 4, 5]:
                 return True
@@ -87,7 +88,7 @@ class Helper():
                 return False
                
         elif self.ver_num in [3, 4, 5, 6, 7, 8]:
-            if zchar == 4:
+            if zchar in [4, 5]:
                 return True
             else:
                 return False
