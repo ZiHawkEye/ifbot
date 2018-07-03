@@ -4,7 +4,6 @@ Created on Wed May 16 23:34:51 2018
 
 @author: User
 """
-from operations import *
 
 def ops(op_table, 
         kind, op_num, 
@@ -45,7 +44,7 @@ def make_table(ver_num):
         ops(op_table, 0, 6, is_null=True)
         
     ops(op_table,     0, 7,  'restart')
-    ops(op_table,     0, 8,  'retpulled')
+    ops(op_table,     0, 8,  'ret_pulled')
     
     if ver_num in [1, 2, 3, 4]:
         ops(op_table, 0, 9,  'pop')

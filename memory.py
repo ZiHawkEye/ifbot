@@ -4,8 +4,7 @@ Created on Mon Mar 19 16:30:51 2018
 
 @author: User
 """
-from helper import Helper
-from helper import Instruction
+from helper import *
 
 class Memory():
     def __init__(self, file):        
@@ -38,7 +37,6 @@ class Memory():
         #may overlap with static memory
         self.high = []
         
-        
         #segments memory into dynamic, static and high
         self.segment_mem()
         
@@ -48,13 +46,16 @@ class Memory():
         self.pc = self.get_pc_start()
         
         #index of 'memory' where abbreviation table is stored
-        self.abbrev_table = self.get_abbrev()
+        self.abbrev_start = self.get_abbrev_start()
+
+        #index of 'memory' where global variables are stored
+        self.gvars_start = self.get_gvars_start()
         
         #dictionary
         self.dict = 0
         
-        #object tree
-        self.obj_tree = 0
+        #object table
+        self.obj_tb = self.get_obj_tb_start()
         
         
 # =============================================================================
@@ -110,6 +111,44 @@ class Memory():
         
         return memory
 
+    def set_gvar(self, var, value):
+        assert (len(value) == 2 and type(value[0]) == bytes), "Incorrect format for value to be stored in global variable"
+        address = self.get_gvars_start + var*2
+        self.memory[address:address + 2] = value[:]
+
+    def storew(self, baddr, n, a):
+        assert(len(a) == 2 and type(a[0]) == bytes), "Incorrect format for a in storew"
+        index = baddr + 2*n
+        self.memory[index: index + 2] = a[:]
+
+    def storeb(self, baddr, n, byte):
+        assert(len(byte) == 1 and type(byte) == bytes), "Incorrect format for byte in storeb"
+        index = baddr + n
+        self.memory[index] = byte
+
+    def copy_table(self, baddr1, baddr2, s):
+        if baddr2 == 0:
+            for i in range(s):
+                self.memory[baddr1 + i] = 0
+        else:
+            if s < 0:
+                s *= -1 
+                # if s is negative, copy forwards table at add1 to add2 even if it corrupts add1 table
+                # assume that add1 table entries wont be corrupted before they are read?
+                for i in range(s):
+                    self.memory[baddr2 + i] = self.memory[baddr1 + i]
+            
+            elif s > 0:
+                # checks if tables overlap
+                # if tables overlap then copy backwards to avoid corruption
+                # otherwise copy forwards by default
+                if (baddr1 - baddr2) < s and (baddr1 - baddr2) > 0:
+                    #copies table backwards
+                    baddr2 -= s
+                
+                for i in range(s):
+                    self.memory[baddr2 + i] = self.memory[baddr1 + i]
+
 # =============================================================================
 # Get Methods for Attributes
 # =============================================================================
@@ -141,22 +180,69 @@ class Memory():
         if self.ver_num != 6:
             return self.get_byte_address(self.memory[address:address + 2])
         else:
-            return self.get_packed_address(self.memory[address:address + 2]) + 1
+            return self.get_packed_address(self.memory[address:address + 2])
     
-    def get_abbrev(self):
+    def get_abbrev_start(self):
         address = self.help.abbrev_add
         return self.get_byte_address(self.memory[address:address + 2])
     
+    def get_gvars_start(self):
+        address = self.help.gvar_add
+        return self.get_byte_address(self.memory[address:address + 2])
 
+    def get_gvar(self, var):
+        address = self.gvars_start + var*2
+        return self.memory[address:address+2]
+
+    def get_obj_tb_start(self):
+        address = self.help.obj_add
+        return self.get_byte_address(self.memory[address:address + 2])
+
+    def loadw(self, baddr, n):
+        address = self.get_byte_address(baddr) + 2*n
+        return self.memory[address:address + 2]
+
+    def loadb(self, baddr, n):
+        address = self.get_byte_address(baddr) + n
+        return self.memory[address]
     
+    def scan_table(self, a, baddr, n, byte):
+        index = self.get_byte_address(baddr)
+        
+        # top bit of byte is 0 to search for a byte, 1 to search for a word, remaining 7 bits 
+        # give the unsigned length of an entry in bytes
+        # default format is \x82, looking for a word in a table of words
+        
+        # convert byte to int
+        int_byte = self.get_int(byte)
+        one = int_byte >> 7
+        seven = int_byte - one << 7
+        format_word = self.get_int(b'\x82')
+        if one == 0:
+            assert (len(a) == 1), "Variable a should not be a word in scan_table"  
+            assert (seven != format_word), "Wrong format code to search for byte in scan_table"
+            for i in range(0, n, 1):
+                if self.memory[index + i] == a:
+                    return index + i
+            return 0
+            
+        elif one == 1:
+            assert (len(a) == 2), "Variable a should not be a byte in scan_table"
+            assert (seven == format_word), "Wrong format code to search for word in scan_table"
+            for i in range(0, n, 2):
+                if self.memory[index + i: index + i + 2] == a[:]:
+                    return index + i
+            return 0
+
+
 # =============================================================================
 # Helper Functions
 # # =============================================================================
 # =============================================================================
 # Data Structures
 # =============================================================================
-    #arithmetic
-    #converts a hexadecimal number to base 10
+    # arithmetic
+    # converts a hexadecimal number to base 10
     def get_int(self, hexa, order='default'):
         if order == 'default':
             num = int.from_bytes(hexa, byteorder=self.order)
@@ -165,17 +251,19 @@ class Memory():
         return num
     
     
-    #converts list of hexadecimal numbers(2 bytes/elems long) to base- 10 integer
+    # converts list of hexadecimal numbers(2 bytes/elems long) to base- 10 integer
     def get_num(self, hexa, signed=False):
-        #converts hexa list to int        
-        hexanum = b''.join(hexa)
+        # converts hexa list to int        
+        # assert (len(hexa) == 2), "Hexadecimal number is not 2 bytes long for get_num"
+        hexanum = b''.join(hexa) if len(hexa) != 1 else hexa
         num = self.get_int(hexanum)
 
-        #checks if num is signed 
+        # checks if num is signed 
         if signed == True:
             if num >> 15 == 0:#if the top bit is 0, num is unsigned            
                 return num 
             else:
+                # CHECK
                 return num - 2 ** 16 
         else:
             return num
@@ -183,99 +271,113 @@ class Memory():
 # =============================================================================
 # Text
 # =============================================================================
-    #converts 2 byte list of hexa char into 1x 1 bit int and 3 5 bit ints
+    # converts 2 byte list of hexa char into 1x 1 bit int and 3 5 bit ints
     def get_zscii(self, hexa):
-        #converts hexa to int
+        assert (len(hexa) == 2), "zscii characters should be of 2 bytes"
+        # converts hexa to int
         intchar = self.get_num(hexa)
         
-        #splits bit into 1 bit followed by 3x 5 bit ints
+        # splits byte into 1 bit followed by 3x 5 bit ints
         zscii = []
-        shift = [15, 10, 5, 0]
-        for i in range(4):    
-            n = shift[i]
-            #extracts the desired bit substring by shifting the whole string
-            #right and autotruncating
-            temp = (intchar >> n) 
+        shifts = [15, 10, 5, 0]
+        for shift in shifts:    
+            # extracts the desired bit substring by shifting the whole string
+            # right and autotruncating
+            temp = (intchar >> shift) 
             
-            #appends substring into zscii list
+            # appends substring into zscii list
             zscii.append(temp)
             
-            #removes the extracted substring from the overall bit string
-            intchar -= (temp << n)
+            # removes the extracted substring from the overall bit string
+            intchar -= (temp << shift)
         
-        #zscii list now consists of a 2 byte 'word' broken up into
-        #1x 1 bit int followed by 3x 5 bit ints(aka z chars)
+        # zscii list now consists of a 2 byte 'word' broken up into
+        # 1x 1 bit int followed by 3x 5 bit ints(aka z chars)
         return zscii
     
     
-    #takes in a 5 bit int 'zchar' and maps zscii to characters
-    #depending on zmachine version
+    # takes in a 5 bit int 'zchar' and maps zscii to characters
+    # depending on zmachine version
     def map_zscii(self, zchar, shift=0):
-        #special chars
-        if self.help.check_space(zchar, shift):
+        # special chars
+        is_space = (zchar == 0)
+        is_newline = ((self.ver_num in [1] and
+                        zchar == 1) or
+                        (self.ver_num in [2, 3, 4, 5, 6, 7, 8] and
+                        (zchar == 7 and shift == 2)))
+        if is_space:
             return ' '
-        elif self.help.check_newline(zchar, shift):
+        elif is_newline:
             return '\n'
         
-        #ascii chars
+        # ascii chars
         else:
             if shift == 0:
-                #uppercase
                 return self.help.lower[zchar]
             elif shift == 1:
-                #lowercase
                 return self.help.upper[zchar]
             elif shift == 2:
-                #punctuation
                 return self.help.punct[zchar]
     
     
-    #takes in memory address('memory' index) as argument since the length of a char
-    #is not defined apriori
+    # takes in memory address('memory' index) as argument since the length of a char
+    # is not defined apriori
     def get_string(self, address):
         zlist = []
-        self.pc = address
         
         while True:
-            #convert 2 byte hexa to list containing 3 zchars and 1 bit (of type int)
-            hexa = self.memory[self.pc:self.pc + 2]
+            # convert 2 byte hexa to list containing 3 zchars and 1 bit (of type int)
+            hexa = self.memory[address:address + 2]
             zword = self.get_zscii(hexa)
+
+            # increments memory address
+            address += 2
             
-            #appends all zchars to zlist
+            # appends all zchars to zlist
             for i in range(1, 4):
                 zlist.append(zword[i])
               
-            #checks for terminating condition
-            if zword[0] == 1 or (self.pc + 2) > len(self.memory):
+            # checks for terminating condition
+            if zword[0] == 1 or (address + 2) > len(self.memory):
                 break
-            
-            #increments memory address
-            self.pc += 2
-        
-        # # UNDO
-        # print('zlist: ' + str(zlist))
-        
+                
+        print("zlist: " + str(zlist))
         charlist = []
-        #converts zlist ints to chars
+        # converts zlist ints to chars
         shift = 0
-        for i in range(len(zlist)):
+        # Cannot change loop index inside for loop for python, must use while loop instead
+        i = 0
+        while i < len(zlist):
             zchar = zlist[i]
-            #check if special chars are inside and act accordingly
-            if self.help.check_upper(zchar, shift):
-                #shifts to uppercase
+            # check if special chars are inside and act accordingly
+            is_upper = ((self.ver_num in [1, 2] and
+                            zchar in [2, 3, 4, 5]) or
+                            (self.ver_num in [3, 4, 5, 6, 7, 8] and
+                            zchar == 4))
+            is_punct = ((self.ver_num in [1, 2] and
+                            zchar in [2, 3, 4, 5]) or
+                            (self.ver_num in [3, 4, 5, 6, 7, 8] and
+                            zchar == 5))
+            is_abbrev = ((self.ver_num in [2] and
+                            zchar == 1) or 
+                            (self.ver_num in [3, 4, 5, 6, 7, 8] and
+                            zchar in [1, 2, 3]))
+            is_output = (zchar == 6 and shift == 2)
+            if is_upper:
+                # shifts to uppercase
                 shift = 1
             
-            elif self.help.check_punct(zchar, shift):
-                #shifts to punctuation
+            elif is_punct:
+                # shifts to punctuation
                 shift = 2
                 
-            elif self.help.check_output(zchar, shift):
-                #literal output character
+            elif is_output:
+                # literal output character
                 a = zlist[i + 1]
                 b = zlist[i + 2]
                 long_zchar = (a << 5) + b
-                #convert to little endian?
-                i += 2#will increment one more after the loop ends
+                # convert to little endian?
+                i += 2
                 charlist.append(long_zchar)
                 
 # =============================================================================
@@ -285,45 +387,159 @@ class Memory():
 # and that's the ZSCII character being represented. 
 # =============================================================================         
             
-            elif self.help.check_abbrev(zchar, shift):
-                #gets abbreviated string
-                a = zchar#this works cus zchar is int
+            elif is_abbrev:
+                # gets abbreviated string
+                a = zchar# this works cus zchar is int
                 b = zlist[i + 1]
-                i += 1#will increment one more after the loop ends                
+                i += 1 
+                print("a:" + str(a))
+                print('b:' + str(b))                
                                 
-                #gets the index where word address to abbreviation is stored
-                wa_index = self.abbrev_table + (a - 1) * 32 + b
+                entry = (a - 1) * 32 + b # this is the nth entry in the abbrev table, starting from 0
+                # gets the index where word address to abbreviation is stored
+                wa_index = self.abbrev_start + entry * 2
                 
-                #gets the word address where abbreviation is stored
-                #and converts it to index in 'memory'
+                # gets the word address where abbreviation is stored
+                # and converts it to index in 'memory'
                 word_address = self.get_word_address(self.memory[wa_index:wa_index + 2])
                 
-                #finds the z string and appends it to charlist
+                # finds the z string and appends it to charlist
                 temp = self.get_string(word_address)#CHECK IM NOT SURE
-                # UNDO
-                print("abbrev: " + temp)
-                charlist.append(word)
+                charlist.append(temp)
             
             else:
-                #CHECK IM NOT SURE
-                #does not use the algorithm involving shift and lock keys
-                #maps zscii to characters(depends on the zmachine version)
+                # CHECK IM NOT SURE
+                # does not use the algorithm involving shift and lock keys
+                # maps zscii to characters(depends on the zmachine version)
                 ascii_char = self.map_zscii(zchar, shift=shift)
                 charlist.append(ascii_char)
                 
-                #CHECK not sure if this step is correct
+                # CHECK not sure if this step is correct (only for ver 3+)
                 shift = 0
+            # increments the while loop
+            i += 1
         
+        # Updates program counter
+        self.pc = address
         zstr = ''.join(charlist)
         # UNDO
-        print(zstr)
+        print("zstr: " + zstr)
         return zstr
 
+# =============================================================================
+# Objects
+# =============================================================================
+    def get_obj(self, pc):
+        if self.ver_num in [1, 2, 3]:
+            address = pc
+            # Get flags
+            flags_int = self.get_int(self.memory[address:address + 4])
+            address += 4
+            flags = []
+            for i in range(31, 0, -1):
+                bit = flags_int - (flags_int >> i << i)
+                flags.append(bit)
+            # Get parent, sibling, child
+            parent = self.get_int(self.memory[address])
+            sibling = self.get_int(self.memory[address + 1])
+            child = self.get_int(self.memory[address + 2])
+            address += 3
+            # Get properties
+            properties_add = self.get_byte_address(self.memory[address:address + 2])
+            address += 2
+            properties = self.get_properties(address)
+            return Object(flags, parent, sibling, child, properties)
+        elif self.ver_num in [4, 5, 6]:
+            address = pc
+            # Get flags
+            flags_int = self.get_int(self.memory[address:address + 6])
+            address += 6
+            flags = []
+            for i in range(47, 0, -1):
+                bit = flags_int - (flags_int >> i << i)
+                flags.append(bit)
+            # Get parent, sibling, child
+            parent = self.get_int(self.memory[address:address + 2])
+            sibling = self.get_int(self.memory[address + 2:address + 4])
+            child = self.get_int(self.memory[address + 4:address + 6])
+            address += 6
+            # Get properties
+            properties_add = self.get_byte_address(self.memory[address:address + 2])
+            address += 2
+            properties = self.get_properties(address)
+            return Object(flags, parent, sibling, child, properties)
+    
+    def get_properties(self, pc):
+        # Get text-length
+        properties = {}
+        text_len = self.get_int(self.memory[pc])
+        pc += 1
+        name = self.get_string(pc)
+        assert (self.pc - pc == text_len*2), "Property name length does not equal to stated text_length"
+        properties['name'] = name
+        pc = self.pc
+        if self.ver_num in [1, 2, 3]:
+            for i in range(31):
+                # Get size byte
+                size_byte = self.get_int(self.memory[pc])
+                pc += 1
+                if size_byte == 0:
+                    break
+                # Get number of data bytes (top 3 bits)
+                data_num = size_byte >> 5 + 1
+                # Get property num (bottom 5 bits)
+                property_num = size_byte - (size_byte >> 5 << 5)
+                # Get data bytes
+                data_bytes = self.memory[pc:pc + data_num]
+                pc += data_num
+                properties[property_num] = data_bytes
+        elif self.ver_num in [4, 5, 6]:
+            for i in range(63):
+                # Get size byte
+                size_byte = self.get_int(self.memory[pc])
+                pc += 1
+                if size_byte == 0:
+                    break
+                one = size_byte << 7
+                if one == 1:
+                    # if bit one of size byte is 1, size byte has a 2nd byte
+                    second_byte = self.get_int(self.memory[pc])
+                    pc += 1
+                    # Get number of data bytes (bottom 6 bits of second byte)
+                    data_num = second_byte - (second_byte >> 6 << 6)    
+                else:
+                    # size byte is only one byte
+                    # Get number of data bytes (top 2 bits)
+                    data_num = size_byte >> 6
+                # Get property num (bottom 6 bits)
+                property_num = size_byte - (size_byte >> 6 << 6)
+                # Get data bytes
+                data_bytes = self.memory[pc:pc + data_num]
+                pc += data_num
+                properties[property_num] = data_bytes
 
+        return properties
 
 # =============================================================================
 # Routines and Instructions
 # =============================================================================
+    #start of a routine: function, interrupt or procedure
+    #end of routine: return
+    def get_routine(self, pc):
+        localvars_num = self.get_int(self.memory[pc])
+        self.pc += 1
+        localvars = []
+
+        if self.ver_num in [1, 2, 3, 4]:
+            for i in range(localvars_num):
+                localvars.append(self.memory[self.pc:self.pc + 2])
+                self.pc += 2
+        elif self.ver_num in [5, 6]:
+            for i in range(localvars_num):
+                localvars.append(0)
+
+        return localvars
+    
     #takes in 'memory' index as argument since the length of an instruction
     #is not defined apriori
     #note: python passes args by assignment so mutable variables can be changed
@@ -349,6 +565,17 @@ class Memory():
 
         #gets format: 0:long, 1:short, 2:variable, 3:extended
         form = self.get_format(byte)
+
+        # UNDO
+        if form == 0:
+            data = self.memory[pc]
+        elif form == 1:
+            data = self.memory[pc]
+        elif form == 2:
+            data = self.memory[pc:pc + 2]
+        elif form == 3:
+            data = self.memory[pc:pc + 3]
+        print("data: " + str(data))
 
         #gets opcode
         #if format is extended, the op num is in the 2nd byte
@@ -402,9 +629,9 @@ class Memory():
                 assert (self.pc - pc == 3), "Wrong byte for operands in extended format"
         
         # UNDO
-        print("types: " + str(types))
-        print("op_count: " + str(op_count))
         print("form: " + str(form))
+        print("op_count: " + str(op_count))
+        print("types: " + str(types))
         
         #get the next sequences of bits representing operands
         #if form is 0, 1 the operands start from the 2nd byte
@@ -444,9 +671,8 @@ class Memory():
         # if multiple arguments are specified, which one is read first?
         str_arg = None
         res_arg = None
-        br_arg = None
-        is_reversed = False
-        offset = 0
+        is_reversed = None
+        offset = None
         if instr_details["is_str"] == True:
             charlist = self.get_string(self.pc)
 
@@ -461,74 +687,80 @@ class Memory():
 
         if instr_details["is_br"] == True:
             # the branch argument is always the last of the sequence of arguments
-            # checks bit 6 to see if branch arg is 1 or 2 bytes
+            # checks bit 2 to see if branch arg is 1 or 2 bytes
             byte = self.memory[self.pc]
             int_byte = self.get_int(byte)
-            # gets bit 6
-            six = (int_byte >> 2) - (int_byte >> 3 << 1)
-            seven = (int_byte >> 1) - (int_byte >> 2 << 1)
+            # gets bit 2
+            one = (int_byte >> 7)
+            two = (int_byte >> 6) - (one << 1)
             # checks if reverse logic
-            is_reversed = True if seven == 0 else False
-            is_one = True if (six == 1) else False
+            is_reversed = True if one == 0 else False
+            is_one = True if (two == 1) else False
             br_arg_byte = self.memory[self.pc] if is_one else self.memory[self.pc: self.pc + 2]
             br_arg = self.get_int(br_arg_byte)
             # gets offset
-            offset = (br_arg - (br_arg >> 6 << 6)) if is_one else (br_arg - (br_arg >> 14 << 14))
+            # unsigned if 1 byte and signed if 2
+            if is_one:
+                offset = (br_arg - (br_arg >> 6 << 6))
+            else:
+                signed_bits = (br_arg - (br_arg >> 14 << 14))
+                offset = signed_bits if (signed_bits < 1 << 13) else (signed_bits - n ** 14)
+
             self.pc = self.pc + 1 if is_one else self.pc + 2
 
-        # CHECK
-        # replace types list?
-        arg_types = instr_details["types"]
-        if arg_types != []:
+        op_types = instr_details["types"]
+        if op_types != []:
             for i in range(len(operands)):
-                argt = arg_types[i]
+                opt = op_types[i]
                 op = operands[i]
-                # UNDO
-                # print("op: " + str(op))
-                if argt == "s" or argt == "t":
-                    op = self.get_num(op, signed=True)
+                
+                if opt == "s" or opt == "t":
+                    operands[i] = self.get_num(op, signed=True)
 
-                elif argt == "bit":
-                    op = self.get_int(op)
+                elif opt == "bit":
+                    operands[i] = self.get_int(op)
 
-                elif argt == "byte":
-                    op = self.get_int(op)
+                elif opt == "byte":
+                    pass
 
-                elif argt == "var":
+                elif opt == "var":
                     assert (len(op) == 1), "Variable number operand is not 1 byte"
-                    op = self.get_int(op)
+                    operands[i] = self.get_int(op)
 
-                elif argt == "baddr":
-                    op = self.get_byte_address([op])
+                elif opt == "baddr":
+                    operands[i] = self.get_byte_address(op)
 
-                elif argt == "raddr":
-                    op = self.get_packed_address(op, is_routine_call=True)
+                elif opt == "raddr":
+                    operands[i] = self.get_packed_address(op, is_routine_call=True)
 
-                elif argt == "saddr":
-                    op = self.get_packed_address(op, is_print_paddr=True)
+                elif opt == "saddr":
+                    operands[i] = self.get_packed_address(op, is_print_paddr=True)
 
-                elif argt == "obj":
+                elif opt == "obj":
                     pass
 
-                elif argt == "attr":
+                elif opt == "attr":
                     pass
 
-                elif argt == "prop":
+                elif opt == "prop":
                     pass
 
-                elif argt == "window":
+                elif opt == "window":
                     pass
 
-                elif argt == "time":
+                elif opt == "time":
                     pass
 
-                elif argt == "pic":
+                elif opt == "pic":
                     pass
+
+                else:
+                    operands[i] = self.get_num(op)
 
         # initializes instr obj with values/args
         # types may not be necessary for execution
         name = instr_details['name']
-        instr = Instruction(name, operands, str_arg, res_arg, br_arg, is_reversed, offset)
+        instr = Instruction(name, operands, str_arg, res_arg, is_reversed, offset)
 
         return instr
         
@@ -714,7 +946,7 @@ class Memory():
 # =============================================================================
     #converts byte address list(2 bytes/elems long) to index in 'memory'
     def get_byte_address(self, byte_list):
-        assert (len(byte_list) == 2), "Byte address " +  str(byte_list) + " is not 16 bits" 
+        # assert (len(byte_list) == 2), "Byte address " +  str(byte_list) + " is not 2 bytes" 
         index = self.get_num(byte_list)
         return index
     
