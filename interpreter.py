@@ -6,8 +6,10 @@ Created on Wed Mar 21 22:09:06 2018
 """
 
 #TODO
-#test call, jump, branch, store functionality
-#make sure the stack functions as specified
+#consider adding functionality similar to ztools
+#need some way to monitor the state of the game
+#test object functionality
+#when to use get_int and get_num?
 #when does type conversion of global, local, routine variables occur?
 
 from memory import Memory
@@ -45,24 +47,40 @@ class Interpreter():
         self.stack.append(first_frame)
         self.cur_frame = first_frame
 
-        # # start to execute instructions
-        # # issue with dectets, abbrev?
-        for i in range(25):
+        # start to execute instructions
+        # issue with dectets, abbrev?
+        for i in range(200):
+            # current state of interpreter?
             self.cur_frame = self.stack[len(self.stack) - 1]
             # gets instr details 
             instr = self.memory.get_instr(self.cur_frame.get_pc())
-            # updates program counter
+            # converts unsigned numbers to variable numbers
+            operands = instr.operands
+            types = instr.types
+            for i in range(len(operands)):
+                # checks if operand is an unsigned variable num - for instructions that may take it either variable or unsigned operands
+                if types[i] == 2:
+                    var = operands[i]
+                    # moves value from variable to top of routine stack
+                    self.load(0, operands[i])
+                    # pops routine stack
+                    temp = self.pop()
+                    # converts to unsigned int
+                    operands[i] = temp if type(temp) == int else self.memory.get_num(temp)
+                    assert (operands[i] < 2 ** 16), "Unsigned variables are 16 bit, not " + str(operands[i])
+                    print("op: " + str(operands[i]) + " var: " + str(var))
+
+            # updates program counter 
+            # this ensures that the program counter is not affected by the execution of instructions except for call instructions
             self.cur_frame.set_pc(self.memory.get_pc())
             # executes
-            print('operands: ' + str(instr.operands))
-            print('arguments: ' + str(instr.arguments))
-            # print('pc: ' + str(self.cur_frame.get_pc()))
-            # try:
-            #     instr_function = getattr(self, instr.name)
-            # except AttributeError:
-            #     raise NotImplementedError("Class `{}` does not implement `{}`".format(self.__class__.__name__, instr.name))
-            # # use * before an iterable to expand it before a function call
-            # instr_function(*instr.arguments, *instr.operands)
+            print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
+            try:
+                instr_function = getattr(self, instr.name)
+            except AttributeError:
+                raise NotImplementedError("Class `{}` does not implement `{}`".format(self.__class__.__name__, instr.name))
+            # use * before an iterable to expand it before a function call
+            instr_function(*instr.arguments, *instr.operands)
             
 # =============================================================================
 # Get Methods
@@ -77,6 +95,7 @@ class Interpreter():
         return self.cur_frame.pop_routine_stack()
 
     def store(self, var, a):
+        assert (var in range(0, 256)), "Incorrect value of var " + str(var) + " in store"
         if var == 0:
             self.push(a)
         elif var in range(1, 16):
@@ -85,6 +104,7 @@ class Interpreter():
             self.memory.set_gvar(var - 16, a)
             
     def load(self, result, var):
+        assert (var in range(0, 256)), "Incorrect value of var " + str(var) + " in load"
         if var == 0:        
             value = self.pop()
         elif var in range(1, 16):
@@ -102,12 +122,12 @@ class Interpreter():
 
     def loadw(self, result, baddr, n):
         value = self.memory.loadw(baddr, n)
-        assert (len(value == 2) and type(value[0]) == bytes), "Incorrect format of value in loadw"
+        assert (len(value) == 2 and type(value[0]) == bytes), "Incorrect format of value in loadw"
         self.store(result, value)
 
     def loadb(self, result, baddr, n):
         value = self.memory.loadb(baddr, n)
-        assert(len(value == 1) and type(value) == bytes), "Incorrect format of value in loadb"
+        assert(len(value) == 1 and type(value) == bytes), "Incorrect format of value in loadb"
         self.store(result, value)
 
     def pull(self, var):
@@ -207,7 +227,7 @@ class Interpreter():
         if b1 == None and b2 == None and b3 == None:
             pass
         else:
-            condition = (a == b1 or a == b2 or a == b3)
+            condition = a in [b1, b2, b3]
             if is_reversed:
                 condition = not condition
             if condition:
@@ -242,6 +262,7 @@ class Interpreter():
             self.cur_frame.set_pc(pc + offset - 2)
 
     def jump(self, s):
+        pc = self.cur_frame.get_pc()
         self.cur_frame.set_pc(pc + s - 2)
 
 # Call and return, throw and catch
@@ -249,7 +270,7 @@ class Interpreter():
     # 2nd last char of func name refers to presence of result args - f:yes, p:no 
     def call(self, raddr, values=[], result=None, ret=None, n=None):
         # if raddr is 0, either it is the result or if result is already present, nothing happens
-        assert (raddr != 0 and result == None), "Raddr should not be 0 if result argument is present"
+        assert ((raddr == 0 and result == None) or (raddr != 0)), "Raddr should not be 0 if result argument is present"
         localvars = self.memory.get_routine(raddr)
         pc = self.memory.get_pc()
         # passes in operands into localvars
@@ -313,12 +334,13 @@ class Interpreter():
     def ret(self, a):
         # Note that print_rtrue, ret_pulled, rfalse, rtrue, throw do a ret implicitly
         # returns a value to the previous frame to be stored in the result arg
+        # result arg is stored in the frame to be popped during call(), else the main routine would require a result arg
         if self.ver_num in [3, 4, 5, 6]:
             ret = self.cur_frame.get_ret()
         assert (len(self.stack) != 1), "Stack should not be left empty on return instruction"
+        result = self.cur_frame.get_result()
         self.stack.pop()
         self.cur_frame = self.stack[len(self.stack) - 1]
-        result = self.cur_frame.get_result()
         # CHECK
         # if the routine was called as an interrupt, return the value a to the caller
         if ret == "function":
@@ -353,53 +375,182 @@ class Interpreter():
         pass
 
 # Objects, attributes and their properties
+# Note: Reading in the obj may change the program counter due to the get_string() function but
+# Any changes in the memory's program counter should not affect the frame program counter
     def get_sibling(self, result, is_reversed, offset, obj):
-        pass
+        # obj refers to a legal obj number
+        # Gets the object of type Object 
+        obj_var = self.memory.get_obj(obj)
+        # sibling is a legal obj number
+        # sibling should be value 0 if it doesnt exist
+        sibling = obj_var.sibling
+        self.store(result, sibling)
+        condition = sibling != 0
+        if is_reversed:
+            condition = not condition
+        if condition:
+            pc = self.cur_frame.get_pc()
+            self.cur_frame.set_pc(pc + offset - 2)
+
+    def get_child(self, result, is_reversed, offset, obj):
+        # obj refers to a legal obj number
+        # Gets the object of type Object 
+        obj_var = self.memory.get_obj(obj)
+        # child is a legal obj number 
+        # child should be value 0 if it doesnt exist
+        child = obj_var.child
+        self.store(result, child)
+        condition = child != 0
+        if is_reversed:
+            condition = not condition
+        if condition:
+            pc = self.cur_frame.get_pc()
+            self.cur_frame.set_pc(pc + offset - 2)
+
+    def get_parent(self, result, is_reversed, offset, obj):
+        # obj refers to a legal obj number
+        # Gets the object of type Object
+        obj_var = self.memory.get_obj(obj)
+        # parent is a legal obj number
+        # parent should be value 0 if it doesnt exist
+        parent = obj_var.parent
+        self.store(result, parent)
+        condition = parent != 0
+        if is_reversed:
+            condition = not condition
+        if condition:
+            pc = self.cur_frame.get_pc()
+            self.cur_frame.set_pc(pc + offset - 2)    
+
+    def remove_obj(self, obj):
+        # the current obj is set to have no parents and siblings
+        # its children remain unchanged - all its children move with it
+        # no other objects should reference obj and the sibling chain should be closed
+        # Gets the object of type Object
+        obj_var = self.memory.get_obj(obj)
+        parent = self.memory.get_obj(obj_var.parent)
+        if parent.child != obj:
+            # Gets the first sibling
+            cur_sibling = self.memory.get_obj(parent.child)
+            sibling_num = parent.child
+            # iterates through siblings until the sibling before the current obj is found
+            while cur_sibling.sibling != obj and cur_sibling.sibling != 0:
+                sibling_num = cur_sibling.sibling
+                cur_sibling = self.memory.get_obj(cur_sibling.sibling)
+            sibling_before = cur_sibling
+            # close the sibling chain
+            sibling_before.sibling = obj_var.sibling
+        else:
+            parent.child = obj_var.sibling
+        # obj has no parents and siblings
+        obj_var.parent = 0
+        obj_var.sibling = 0
+        # encodes changes
+        self.memory.set_obj(obj_var.parent, parent)
+        self.memory.set_obj(sibling_num, sibling_before)
+        self.memory.set_obj(obj, obj_var)
+
+    def insert_obj(self, obj1, obj2):
+        # Remove obj1 from its current position in the tree 
+        self.remove_obj(obj1)
+        # Insert it as the 1st child of obj2
+        obj1_var = self.memory.get_obj(obj1)
+        obj2_var = self.memory.get_obj(obj2)
+        obj1_var.sibling = obj2_var.child
+        obj2_var.child = obj1
+        # Encode changes
+        self.memory.set_obj(obj1, obj1_var)
+        self.memory.set_obj(obj2, obj2_var)
+
+    def test_attr(self, is_reversed, offset, obj, attr):
+        # Branch if object has attribute
+        obj_var = self.memory.get_obj(obj)
+        # attributes are numbered from 1 onwards
+        condition = obj_var.flags[attr - 1] == 1
+        if is_reversed:
+            condition = not condition
+        if condition:
+            pc = self.cur_frame.get_pc()
+            self.cur_frame.set_pc(pc + offset - 2)
+
+    def set_attr(self, obj, attr):
+        obj_var = self.memory.get_obj(obj)
+        # attributes are numbered from 1 onwards
+        obj_var.flags[attr - 1] = 1
+        # Encode object
+        self.memory.set_obj(obj_var, obj)
+
+    def clear_attr(self, obj, attr):
+        obj_var = self.memory.get_obj(obj)
+        # attributes are number from 1 onwards
+        obj_var.flags[attr - 1] = 0
+        # Encode object
+        self.memory.set_obj(obj_var, obj)
+
+    def put_prop(self, obj, prop, a):
+        # Set prop on obj to a. The property must be present on the object(property is in property list? or flag == 1?)
+        self.memory.put_prop(obj, prop, a)
+
+    def get_prop(self, result, obj, prop):
+        # The result is the first word/byte of prop on obj, if present
+        # Else result is default result on default prop list
+        obj_var = self.memory.get_obj(obj)
+        properties = self.memory.get_properties(obj_var.properties_add)
+        try:
+            obj_prop = properties[prop]    
+            assert (len(obj_prop) <= 2), "Property length is greater than 2 bytes"
+        except KeyError:
+            # Property not present on obj, get default 
+            obj_prop = self.memory.loadw(self.memory.prop_defaults, prop)
+        self.store(result, obj_prop)
+
+    def get_prop_addr(self, result, obj, prop):
+        obj_var = self.memory.get_obj(obj)
+        properties = self.memory.get_properties(obj_var.properties_add)
+        try:
+            obj_prop = properties[prop]    
+            assert (len(obj_prop) <= 2), "Property length is greater than 2 bytes"
+        except KeyError:
+            print("Property does not exist on the obj")
+        address = self.memory.get_properties(obj_var.properties_add, prop=prop, add=None)
+        self.store(result, address)
+    
+    def get_next_prop(self, result, obj, prop):
+        # if prop is 0, get the value of the highest property number
+        # else get the next prop (lower prop num)
+        # store as result
+        obj_var = self.memory.get_obj(obj)
+        properties = self.memory.get_properties(obj_var.properties_add)
+        sorted_properties = [(i, a(i)) for i in sorted(properties)]
+        if prop == 0:
+            obj_prop = sorted_properties[len(sorted_properties) - 1]
+        else:
+            value = properties[prop]
+            for i in range(i):
+                if value == sorted_properties[i]:
+                    value = sorted_properties[i + 1]
+                    break
+        self.store(result, value)
+
+    def get_prop_len(self, result, baddr):
+        prop_len = self.memory.get_prop_len(baddr)
+        self.store(result, prop_len)
+
+# Windows
 
 # =============================================================================
 # End of Class
 # =============================================================================
 
-#testing code
-# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
-file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
+file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
+# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
 
-#opens file in binary
+# opens file in binary
 file = open(file_name, "rb")
 
-#need to write file in binary as well
+# need to write file in binary as well
 
-#checks attributes of Memory
+# checks attributes of Memory
 machine = Interpreter(file)
 
 mem = machine.memory.get_memory()
-
-# =============================================================================
-# #tests memory and its segments
-# print(mem[6:8])
-# print(machine.memory.get_byte_address(mem[6:8]))
-# print(machine.memory.get_dynamic(), machine.memory.get_high(), machine.memory.get_static())
-# =============================================================================
-
-# =============================================================================
-# #tests the get string function
-# abbrev_add = machine.help.abbrev_add
-# for i in range(60):
-#     offset = i*2
-#     abbrev_table_add = machine.memory.get_byte_address(mem[abbrev_add:abbrev_add + 2])
-#     #print('abbrev_table_add ' + str(abbrev_table_add))
-#     abbrev_string_location = machine.memory.get_word_address(mem[abbrev_table_add 
-#                                                          + offset:abbrev_table_add
-#                                                          + offset + 2])
-#     #print('abbrev_string_location ' + str(abbrev_string_location))
-
-#     abbrev_string = machine.memory.get_string(abbrev_string_location)
-#     print(abbrev_string)
-# =============================================================================
-
-# #test the instruction encoding (memory.get_instr())
-# pc_add = machine.program_counter
-# for i in range(20):
-#     print('pc_add', pc_add)
-#     instr = machine.memory.get_instr(pc_add)
-#     print('form, count, num, type, ops', instr)

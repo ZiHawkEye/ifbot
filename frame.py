@@ -10,7 +10,7 @@ class Frame():
         return self.pc
     
     def get_localvar(self, var):
-        assert (var <= 1 and var >= 15), "There are only up to 15 local variables per frame"
+        assert (var >= 1 and var <= 15), "There are only up to 15 local variables per frame"
         return self.localvars[var - 1]
 
     def pop_routine_stack(self):
@@ -23,7 +23,7 @@ class Frame():
         self.pc = pc
 
     def set_localvar(self, value, var):
-        assert (var <= 1 and var >= 15), "There are only up to 15 local variables per frame"
+        assert (var >= 1 and var <= 15), "There are only up to 15 local variables per frame"
         self.localvars[var - 1] = value
 
     def push_routine_stack(self, value):

@@ -26,8 +26,9 @@ class Helper():
         # address for abbrev table
         self.abbrev_add = int.from_bytes(b'\x18', byteorder='big')
         
-        # address for object table
+        # address for object table (starts with property defaults table, then lists objects)
         self.obj_add = int.from_bytes(b'\x0a', byteorder='big')
+        self.obj_size = 9 if self.ver_num in [1, 2, 3] else 14
 
         # address for dictionary
         self.dict_add = int.from_bytes(b'\x08', byteorder='big')
@@ -93,7 +94,7 @@ class Helper():
 class Instruction():
     # initiated by ver num, kind, op_num
     # should contain mnemonic, operands and args
-    def __init__(self, name, operands, str_arg, res_arg, is_reversed, offset):
+    def __init__(self, name, types, operands, str_arg, res_arg, is_reversed, offset):
         # use * before an iterable to expand it before a function call
         self.name = name
         self.arguments = []
@@ -105,11 +106,12 @@ class Instruction():
             self.arguments.append(is_reversed)
             self.arguments.append(offset)
         self.operands = operands
+        self.types = types
 
 class Object():
-    def __init__(self, flags, parent, sibling, child, properties):
+    def __init__(self, flags, parent, sibling, child, properties_add):
         self.flags = flags[:]
         self.parent = parent
         self.sibling = sibling
         self.child = child
-        self.properties = properties
+        self.properties_add = properties_add
