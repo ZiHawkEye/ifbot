@@ -52,7 +52,13 @@ class Memory():
         self.gvars_start = self.get_gvars_start()
         
         # dictionary
-        self.dict = 0
+        dict_header = self.get_dict_start()
+        n = self.get_int(self.memory[dict_header])
+        sep_start = dict_header + 1
+        # converts each byte to num, then to ascii char
+        self.separators = [self.get_num(value) for value in self.memory[sep_start:sep_start + n]]
+        self.separators = [chr(value) for value in self.separators]
+        self.dict = sep_start + n
         
         # property defaults table before object table
         self.prop_defaults = self.get_property_defaults_start()
@@ -156,15 +162,13 @@ class Memory():
                 # checks if tables overlap
                 # if tables overlap then copy backwards to avoid corruption
                 # otherwise copy forwards by default
-                if (baddr1 - baddr2) < s and (baddr1 - baddr2) > 0:
+                if baddr1 < baddr2 and baddr1 + s > baddr2:
                     # copies table backwards
-                    baddr2 -= s
-                
-                for i in range(s):
-                    self.memory[baddr2 + i] = self.memory[baddr1 + i]
-        
-        # UNDO
-        assert (False), "STOP"
+                    for i in range(s - 1, -1, -1):
+                        self.memory[baddr2 + i] = self.memory[baddr1 + i]
+                else:
+                    for i in range(s):
+                        self.memory[baddr2 + i] = self.memory[baddr1 + i]
 
 # =============================================================================
 # Get Methods for Attributes
@@ -215,6 +219,10 @@ class Memory():
         address = self.help.obj_add
         byte_address = self.memory[address:address + 2]
         assert(byte_address != b'\x00'), "No objects detected"
+        return self.get_byte_address(byte_address)
+
+    def get_dict_start(self):
+        address = self.help.dict_add
         return self.get_byte_address(self.memory[address:address + 2])
 
     def loadw(self, baddr, n):
@@ -292,7 +300,6 @@ class Memory():
     # convert integers greater than 1 byte into a list of bytes
     def get_bytes(self, num, bytes_num):
         assert (num < 2 ** (bytes_num*8)), "num " + str(num) + " should be less than " + str(2 ** (bytes_num*8))
-        assert (num > 2 ** ((bytes_num - 1)*8)), "num " + str(num) + " should be more than " + str(2 ** ((bytes_num - 1)*8))
         byte_list = []
         for i in range(bytes_num - 1, -1, -1):
             temp = num >> (i*8)
@@ -349,6 +356,8 @@ class Memory():
                 return self.help.upper[zchar]
             elif shift == 2:
                 return self.help.punct[zchar]
+            else:
+                raise Exception("Invalid zscii code")
     
     
     # takes in memory address('memory' index) as argument since the length of a char
@@ -408,6 +417,7 @@ class Memory():
                 long_zchar = (a << 5) + b
                 # convert to little endian?
                 i += 2
+                assert (type(long_zchar) == str), "What to do with literal output characters in get_string()?"
                 charlist.append(long_zchar)
                 
 # =============================================================================
@@ -451,7 +461,7 @@ class Memory():
         self.pc = address
         zstr = ''.join(charlist)
         # UNDO
-        print("zstr: " + zstr)
+        # print("zstr: " + zstr)
         return zstr
 
 # =============================================================================
@@ -805,7 +815,7 @@ class Memory():
         is_reversed = None
         offset = None
         if instr_details["is_str"] == True:
-            charlist = self.get_string(self.pc)
+            str_arg = self.get_string(self.pc)
 
         elif instr_details["is_res"] == True:
             # decode byte variable number

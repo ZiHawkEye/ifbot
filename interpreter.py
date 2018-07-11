@@ -11,10 +11,13 @@ Created on Wed Mar 21 22:09:06 2018
 #test object functionality
 #when to use get_int and get_num?
 #when does type conversion of global, local, routine variables occur?
+#consider converting all of memory to int list?
 
+import warnings
 from memory import Memory
 from helper import *
 from frame import *
+from window import *
 from math import *
 
 class Interpreter():
@@ -27,6 +30,10 @@ class Interpreter():
         
         # set of predetermined values and functions
         self.help = Helper(self.ver_num)
+
+        # input and output streams
+        self.ostream = [True, True, False, False]
+        self.istream = 0
         
         # parts of the z machine not included in the story file
         # define the state of play to be saved
@@ -135,7 +142,7 @@ class Interpreter():
         self.store(var, value)
     
     def pull_b(self, result, baddr):
-        pass
+        warnings.warn("Not implemented")
 
     def scan_table(self, result, is_reversed, offset, a, baddr, n, byte):
         value = self.memory.scan_table(a, baddr, n, byte)
@@ -150,10 +157,10 @@ class Interpreter():
         self.memory.copy_table(baddr1, baddr2, s)
 
     def push_stack(self, is_reversed, offset, a, baddr):
-        pass
+        warnings.warn("Not implemented")
 
     def pull_stack(self, n, baddr):
-        pass
+        warnings.warn("Not implemented")
 
 # Arithmetic
     def add(self, result, a, b):
@@ -175,22 +182,22 @@ class Interpreter():
         self.store(result, value)
 
     def inc(self, var):
-        value = self.load(var)
-        value += 1
+        self.load(0, var)
+        value = self.pop() + 1
         self.store(var, value)
 
     def dec(self, var):
-        value = self.load(var)
-        value -= 1
+        value = self.load(0, var)
+        value = self.pop - 1
         self.store(var, value)
 
-    def inc_jg(self, branch, var, s):
-        # CHECK
-        pass
+    def inc_jg(self, is_reversed, offset, var, s):
+        self.inc(var)
+        self.jg(is_reversed, offset, var, s)
 
-    def dec_jl(self, branch, var, s):
-        # CHECK
-        pass
+    def dec_jl(self, is_reversed, offset, var, s):
+        self.dec(var)
+        self.jl(is_reversed, offset, var, s)
 
     def or_(self, result, a, b):
         value = a|b
@@ -251,7 +258,7 @@ class Interpreter():
             self.cur_frame.set_pc(pc + offset - 2)
 
     def jin(self, is_reversed, offset, obj, n):
-        pass
+        warnings.warn("Not implemented")
 
     def test(self, is_reversed, offset, a, b):
         condition = a & b
@@ -368,11 +375,11 @@ class Interpreter():
 
     def catch(self, result):
         # CHECK
-        pass
+        warnings.warn("Not implemented")
     
     def throw(self):
         # CHECK
-        pass
+        warnings.warn("Not implemented")
 
 # Objects, attributes and their properties
 # Note: Reading in the obj may change the program counter due to the get_string() function but
@@ -537,13 +544,223 @@ class Interpreter():
         self.store(result, prop_len)
 
 # Windows
+    def get_wind_prop(self, result, window, p):
+        warnings.warn("Not implemented")
+
+    def put_wind_prop(self, window, p, a):
+        warnings.warn("Not implemented")
+
+    def split_screen(self, n):
+        warnings.warn("Not implemented")
+
+    def set_window(self, window):
+        warnings.warn("Not implemented")
+
+    def set_cursor(self, s, x):
+        warnings.warn("Not implemented")
+
+    def set_cursor_w(self, s, w, window=None):
+        warnings.warn("Not implemented")
+
+    def get_cursor(self, baddr):
+        warnings.warn("Not implemented")
+
+    def buffer_mode(self, bit):
+        warnings.warn("Not implemented")
+
+    def set_colour(self, byte0, byte1):
+        warnings.warn("Not implemented")
+
+    def set_text_style(self, n):
+        warnings.warn("Not implemented")
+
+    def set_font(self, result, n):
+        warnings.warn("Not implemented")
+
+    def set_font_w(self, result, n, window=None):
+        warnings.warn("Not implemented")
+
+    def move_window(self, window, y, x):
+        warnings.warn("Not implemented")
+
+    def window_size(self, window, y, x):
+        warnings.warn("Not implemented")
+
+    def set_margins(self, x1, xr, window=None):
+        warnings.warn("Not implemented")
+
+    def window_style(self, window, flags, op):
+        warnings.warn("Not implemented")
+
+# Input and output streams
+    def output_stream(self, s, baddr=None, w=None):
+        assert (abs(s) in [-1, -2, -3, -4, 1, 2, 3, 4]), "Incorrect value of s " + str(s) + " in output_stream()"
+        if s > 0:
+            stream = s - 1
+            if s == 3:
+                assert (baddr != None), "baddr cannot be None if writing to memory"
+            self.ostream[stream] = True
+            # CHECK
+            # what happens if baddr or w are present?
+        elif s < 0:
+            stream = (s + 1)*(-1)
+            self.ostream[stream] = False
+    
+    def output_stream_b(self, s, baddr=None):
+        self.output_stream(s, baddr)
+
+    def output_stream_bw(self, s, baddr=None, w=None):
+        self.output_stream(s, baddr, w)
+
+    def input_stream(self, n):
+        assert (n in [0, 1]), "Incorrect value of n " + str(n) + " in input_stream()"
+        self.istream = n
+
+# Input
+    def read(self, baddr1, baddr2, time=None, result=None):
+        # refresh status bar
+        # read in char from current input stream (mouse not implemented)
+        stream = input()
+        # tokenise
+        # if status bar is present, show_status()
+    
+    def read_t(self, baddr1, baddr2, time=None):
+        self.read(baddr1, baddr2, time)
+
+    def read_w(self, result, baddr1, baddr2, time=None):
+        self.read(baddr1, baddr2, time, result)
+
+    def read_char(self, one, time=None, raddr=None):
+        assert (one == 1), "Error in read_char()"
+
+# Character based output
+    def print_char(self, n):
+        warnings.warn("Not implemented")
+    
+    def new_line(self):
+        warnings.warn("Not implemented")
+    
+    def print_(self, string):
+        print(string)
+
+    def print_rtrue(self, string):
+        warnings.warn("Not implemented")
+
+    def print_addr(self, baddr):
+        warnings.warn("Not implemented")
+
+    def print_paddr(self, saddr):
+        warnings.warn("Not implemented")
+
+    def print_num(self, s):
+        warnings.warn("Not implemented")
+
+    def print_obj(self, obj):
+        warnings.warn("Not implemented")
+
+    def print_table(self, baddr, x, y=None, n=None):
+        warnings.warn("Not implemented")
+
+    def print_form(self, baddr):
+        warnings.warn("Not implemented")
+
+    def scroll_window(self, window, s):
+        warnings.warn("Not implemented")
+
+ # Miscellaneous screen input
+    def erase_line(self):
+        warnings.warn("Not implemented")
+    
+    def erase_line_n(self, n):
+        warnings.warn("Not implemented")
+
+    def erase_window(self, window):
+        warnings.warn("Not implemented")
+
+    def draw_picture(self, pic, y=None, x=None):
+        warnings.warn("Not implemented")
+
+    def erase_picture(self, pic, y=None, x=None):
+        warnings.warn("Not implemented")
+
+    def picture_data(self, branch, n, baddr):
+        warnings.warn("Not implemented")
+
+    def picture_table(self, baddr):
+        warnings.warn("Not implemented")
+
+# Sound, mouse and menus
+    def sound(self, n, op=None, vol=None, raddr=None):
+        warnings.warn("Not implemented")
+
+    def read_mouse(self, baddr):
+        warnings.warn("Not implemented")
+    
+    def mouse_window(self, window):
+        warnings.warn("Not implemented")
+
+    def make_menu(self, branch, n, baddr):
+        warnings.warn("Not implemented")
+        
+# Save, restore, undo
+    def save_b(self, branch):
+        warnings.warn("Not implemented")
+
+    def save_r(self, result):
+        warnings.warn("Not implemented")
+
+    def save(self, result, baddr1=None, n=None, baddr2=None):
+        warnings.warn("Not implemented")
+
+    def restore_b(self, branch):
+        warnings.warn("Not implemented")
+    
+    def restore_r(self, result):
+        warnings.warn("Not implemented")
+
+    def restore(self, result, baddr1=None, n=None, baddr2=None):
+        warnings.warn("Not implemented")
+    
+    def save_undo(self, result):
+        warnings.warn("Not implemented")
+
+    def restore_undo(self, result):
+        warnings.warn("Not implemented")
+
+# Miscellaneous
+    def nop(self):
+        warnings.warn("Not implemented")
+
+    def random(self, result, s):
+        warnings.warn("Not implemented")
+
+    def restart(self):
+        warnings.warn("Not implemented")
+    
+    def quit(self):
+        warnings.warn("Not implemented")
+    
+    def show_status(self):
+        warnings.warn("Not implemented")
+    
+    def verify(self, branch):
+        warnings.warn("Not implemented")
+
+    def piracy(self, branch):
+        warnings.warn("Not implemented")
+
+    def tokenise(self, baddr1, baddr2, baddr3=None, bit=None):
+        warnings.warn("Not implemented")
+
+    def encode_text(self, badd1, n, p, baddr2):
+        warnings.warn("Not implemented")
 
 # =============================================================================
 # End of Class
 # =============================================================================
 
-file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
-# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
+# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
+file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
 
 # opens file in binary
 file = open(file_name, "rb")

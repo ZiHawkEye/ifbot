@@ -208,11 +208,11 @@ def make_table(ver_num):
         ops(op_table, 3, 18, is_null=True)    
         
     if ver_num in [3, 4]:
-        ops(op_table, 3, 19, 'output_streams',                          types=["s"])    
+        ops(op_table, 3, 19, 'output_stream',                          types=["s"])    
     elif ver_num == 5:
-        ops(op_table, 3, 19, 'output_streams_b',                        types=["s", "baddr"])    
+        ops(op_table, 3, 19, 'output_stream_b',                        types=["s", "baddr"])    
     elif ver_num == 6:
-        ops(op_table, 3, 19, 'output_streams_bw',                       types=["s", "baddr", "u"])
+        ops(op_table, 3, 19, 'output_stream_bw',                       types=["s", "baddr", "u"])
     else:
         ops(op_table, 3, 19, is_null=True)        
     
