@@ -768,7 +768,7 @@ class Memory():
                         properties_byte)
             assert (len(obj_bytes) == 9), "Error encoding object as bytes"
             # read into memory
-            self.memory[address:address + 9] = obj_bytes[:]
+            self.memory[address:address + 9] = obj_bytes
         elif self.ver_num in [4, 5, 6]:
             # Get flags and convert into 6 bytes
             flags = obj_var.flags
@@ -788,9 +788,9 @@ class Memory():
                         sibling_byte + 
                         child_byte + 
                         properties_byte)
-            assert (len(obj_bytes) == 9), "Error encoding object as bytes"
+            assert (len(obj_bytes) == 14), "Error encoding object as bytes"
             # read into memory
-            self.memory[address:address + 14] = obj_bytes[:]
+            self.memory[address:address + 14] = obj_bytes
 
     def put_prop(self, obj, prop, a):
         # Set prop on obj to a. The property must be present on the object(property is in property list? or flag == 1?)

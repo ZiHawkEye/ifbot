@@ -12,6 +12,7 @@ Created on Wed Mar 21 22:09:06 2018
 #when to use get_int and get_num?
 #when does type conversion of global, local, routine variables occur?
 #consider converting all of memory to int list?
+#what are dectets used for in zstrings?
 
 import warnings
 import threading
@@ -56,12 +57,10 @@ class Interpreter():
         self.stack.append(first_frame)
         self.cur_frame = first_frame
 
+    def start(self):
         # start to execute instructions
-        # issue with dectets, abbrev?
         for i in range(200):
-            # current state of interpreter?
             self.cur_frame = self.stack[-1]
-            # gets instr details 
             instr = self.memory.get_instr(self.cur_frame.get_pc())
             # converts unsigned numbers to variable numbers
             operands = instr.operands
@@ -78,7 +77,7 @@ class Interpreter():
                     operands[i] = temp if type(temp) == int else self.memory.get_num(temp)
                     assert (operands[i] < 2 ** 16), "Unsigned variables are 16 bit, not " + str(operands[i])
                     # UNDO
-                    # print("op: " + str(operands[i]) + " var: " + str(var))
+                    print("op: " + str(operands[i]) + " var: " + str(var))
 
             # updates program counter 
             # this ensures that the program counter is not affected by the execution of instructions except for call instructions
@@ -105,7 +104,6 @@ class Interpreter():
         if is_reversed:
             condition = not condition
         if condition:
-            print("JUMP")
             if offset == 0:
                 self.rfalse()
             elif offset == 1:
@@ -516,13 +514,15 @@ class Interpreter():
         if prop == 0:
             temp = 0
             for key in properties:
-                if key > temp:
-                    temp = key
+                if key != "name":
+                    if key > temp:
+                        temp = key
         else:
             temp = 0
             for key in properties:
-                if key < prop and key > temp:
-                    temp = key
+                if key != "name":
+                    if key < prop and key > temp:
+                        temp = key
         self.store(result, temp)
 
     def get_prop_len(self, result, baddr):
@@ -785,15 +785,15 @@ class Interpreter():
 # End of Class
 # =============================================================================
 
-file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
-# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
+path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
+
+file_name = path + 'zork1.z5'
+# file_name = path + 'hhgg.z3'
 
 # opens file in binary
 file = open(file_name, "rb")
 
-# need to write file in binary as well
-
-# checks attributes of Memory
 machine = Interpreter(file)
 
-mem = machine.memory.get_memory()
+# UNDO
+machine.start()
