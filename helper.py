@@ -49,7 +49,9 @@ class Helper():
             self.punct = """       0123456789.,!?_#'"/\<-:()"""
         else:
             self.punct = """       ^0123456789.,!?_#'"/\-:()"""
-        
+        self.char_map = [self.lower,
+                         self.upper,
+                         self.punct]
         
         # op_table - distinguishes between z machine versions
         self.op_table = make_table(self.ver_num)
@@ -57,40 +59,6 @@ class Helper():
 # =============================================================================
 # Helper Classes
 # =============================================================================
-
-# =============================================================================
-#  Table 2: summary of the ZSCII rules 0 	null 	Output
-# 1-7 	---- 	
-# 8 	delete 	Input
-# 9 	tab (V6) 	Output
-# 10 	---- 	
-# 11 	sentence space (V6) 	Output
-# 12 	---- 	
-# 13 	newline 	Input/Output
-# 14-26 	---- 	
-# 27 	escape 	Input
-# 28-31 	---- 	
-# 32-126 	standard ASCII 	Input/Output
-# 127-128 	---- 	
-# 129-132 	cursor u/d/l/r 	Input
-# 133-144 	function keys f1 to f12 	Input
-# 145-154 	keypad 0 to 9 	Input
-# 155-251 	extra characters 	Input/Output
-# 252 	menu click (V6) 	Input
-# 253 	double-click (V6) 	Input
-# 254 	single-click 	Input
-# 255-1023 	---- 	
-# 3.8.1
-# 
-# The codes 256 to 1023 are undefined, so that for all
-#  practical purposes ZSCII is an 8-bit unsigned code. 
-# =============================================================================
-
-        
-# =============================================================================
-# get_instr        
-# =============================================================================
-
 class Instruction():
     # initiated by ver num, kind, op_num
     # should contain mnemonic, operands and args
@@ -100,9 +68,9 @@ class Instruction():
         self.arguments = []
         if str_arg != None:
             self.arguments.append(str_arg)
-        elif res_arg != None:
+        if res_arg != None:
             self.arguments.append(res_arg)
-        elif is_reversed != None and offset != None:
+        if is_reversed != None and offset != None:
             self.arguments.append(is_reversed)
             self.arguments.append(offset)
         self.operands = operands

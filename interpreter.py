@@ -14,6 +14,8 @@ Created on Wed Mar 21 22:09:06 2018
 #consider converting all of memory to int list?
 
 import warnings
+import threading
+import random
 from memory import Memory
 from helper import *
 from frame import *
@@ -58,7 +60,7 @@ class Interpreter():
         # issue with dectets, abbrev?
         for i in range(200):
             # current state of interpreter?
-            self.cur_frame = self.stack[len(self.stack) - 1]
+            self.cur_frame = self.stack[-1]
             # gets instr details 
             instr = self.memory.get_instr(self.cur_frame.get_pc())
             # converts unsigned numbers to variable numbers
@@ -75,12 +77,16 @@ class Interpreter():
                     # converts to unsigned int
                     operands[i] = temp if type(temp) == int else self.memory.get_num(temp)
                     assert (operands[i] < 2 ** 16), "Unsigned variables are 16 bit, not " + str(operands[i])
-                    print("op: " + str(operands[i]) + " var: " + str(var))
+                    # UNDO
+                    # print("op: " + str(operands[i]) + " var: " + str(var))
 
             # updates program counter 
             # this ensures that the program counter is not affected by the execution of instructions except for call instructions
             self.cur_frame.set_pc(self.memory.get_pc())
+            # UNDO
+            print('0x{0:02x}'.format(self.cur_frame.get_pc()))
             # executes
+            # UNDO
             print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
             try:
                 instr_function = getattr(self, instr.name)
@@ -95,6 +101,18 @@ class Interpreter():
         
 # Operations
 # Reading and writing memory
+    def branch(self, condition, is_reversed, offset):
+        if is_reversed:
+            condition = not condition
+        if condition:
+            print("JUMP")
+            if offset == 0:
+                self.rfalse()
+            elif offset == 1:
+                self.rtrue()
+            else:
+                self.jump(offset)
+
     def push(self, a):
         self.cur_frame.push_routine_stack(a)
     
@@ -146,12 +164,12 @@ class Interpreter():
 
     def scan_table(self, result, is_reversed, offset, a, baddr, n, byte):
         value = self.memory.scan_table(a, baddr, n, byte)
-        if value == 0:
-            return 0
+        condition = value == 0
+        if condition:
+            self.store(result, 0)
         else:
             self.store(result, value)
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2) 
+        self.branch(condition, is_reversed, offset)
 
     def copy_table(self, baddr1, baddr2, s):
         self.memory.copy_table(baddr1, baddr2, s)
@@ -183,21 +201,29 @@ class Interpreter():
 
     def inc(self, var):
         self.load(0, var)
-        value = self.pop() + 1
-        self.store(var, value)
+        temp = self.pop()
+        temp = temp if type(temp) == int else self.memory.get_num(temp)
+        temp += 1
+        self.store(var, temp)
 
     def dec(self, var):
-        value = self.load(0, var)
-        value = self.pop - 1
-        self.store(var, value)
+        self.load(0, var)
+        temp = self.pop()
+        temp = temp if type(temp) == int else self.memory.get_num(temp)
+        temp -= 1
+        self.store(var, temp)
 
     def inc_jg(self, is_reversed, offset, var, s):
         self.inc(var)
-        self.jg(is_reversed, offset, var, s)
+        self.load(0, var)
+        temp = self.pop()
+        self.jg(is_reversed, offset, temp, s)
 
     def dec_jl(self, is_reversed, offset, var, s):
         self.dec(var)
-        self.jl(is_reversed, offset, var, s)
+        self.load(0, var)
+        temp = self.pop()
+        self.jl(is_reversed, offset, temp, s)
 
     def or_(self, result, a, b):
         value = a|b
@@ -223,50 +249,31 @@ class Interpreter():
 # Comparisons and jumps
     def jz(self, is_reversed, offset, a):
         # branch if a is 0
-        condition = (a == 0)
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.je(is_reversed, offset, a, 0)
     
     def je(self, is_reversed, offset, a, b1=None, b2=None, b3=None):
         if b1 == None and b2 == None and b3 == None:
             pass
         else:
             condition = a in [b1, b2, b3]
-            if is_reversed:
-                condition = not condition
-            if condition:
-                pc = self.cur_frame.get_pc()
-                self.cur_frame.set_pc(pc + offset - 2)
+            self.branch(condition, is_reversed, offset)
 
     def jl(self, is_reversed, offset, s, t):
         condition = s < t
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
     def jg(self, is_reversed, offset, s, t):
         condition = s > t
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
     def jin(self, is_reversed, offset, obj, n):
-        warnings.warn("Not implemented")
+        self.get_parent(0, obj)
+        temp = self.pop()
+        self.je(is_reversed, offset, temp, n)
 
     def test(self, is_reversed, offset, a, b):
         condition = a & b
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
     def jump(self, s):
         pc = self.cur_frame.get_pc()
@@ -347,7 +354,7 @@ class Interpreter():
         assert (len(self.stack) != 1), "Stack should not be left empty on return instruction"
         result = self.cur_frame.get_result()
         self.stack.pop()
-        self.cur_frame = self.stack[len(self.stack) - 1]
+        self.cur_frame = self.stack[-1]
         # CHECK
         # if the routine was called as an interrupt, return the value a to the caller
         if ret == "function":
@@ -367,11 +374,7 @@ class Interpreter():
         assert (len(self.stack) != 1), "check_arg_count instruction encountered on the main routine"
         values_passed = self.cur_frame.get_n()
         condition = (values_passed >= n)
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
     def catch(self, result):
         # CHECK
@@ -393,11 +396,7 @@ class Interpreter():
         sibling = obj_var.sibling
         self.store(result, sibling)
         condition = sibling != 0
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
     def get_child(self, result, is_reversed, offset, obj):
         # obj refers to a legal obj number
@@ -408,13 +407,9 @@ class Interpreter():
         child = obj_var.child
         self.store(result, child)
         condition = child != 0
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        self.branch(condition, is_reversed, offset)
 
-    def get_parent(self, result, is_reversed, offset, obj):
+    def get_parent(self, result, obj):
         # obj refers to a legal obj number
         # Gets the object of type Object
         obj_var = self.memory.get_obj(obj)
@@ -422,12 +417,6 @@ class Interpreter():
         # parent should be value 0 if it doesnt exist
         parent = obj_var.parent
         self.store(result, parent)
-        condition = parent != 0
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)    
 
     def remove_obj(self, obj):
         # the current obj is set to have no parents and siblings
@@ -472,27 +461,23 @@ class Interpreter():
     def test_attr(self, is_reversed, offset, obj, attr):
         # Branch if object has attribute
         obj_var = self.memory.get_obj(obj)
-        # attributes are numbered from 1 onwards
-        condition = obj_var.flags[attr - 1] == 1
-        if is_reversed:
-            condition = not condition
-        if condition:
-            pc = self.cur_frame.get_pc()
-            self.cur_frame.set_pc(pc + offset - 2)
+        # attributes are numbered from 0 onwards
+        condition = obj_var.flags[attr] == 1
+        self.branch(condition, is_reversed, offset)
 
     def set_attr(self, obj, attr):
         obj_var = self.memory.get_obj(obj)
-        # attributes are numbered from 1 onwards
-        obj_var.flags[attr - 1] = 1
+        # attributes are numbered from 0 onwards
+        obj_var.flags[attr] = 1
         # Encode object
-        self.memory.set_obj(obj_var, obj)
+        self.memory.set_obj(obj, obj_var)
 
     def clear_attr(self, obj, attr):
         obj_var = self.memory.get_obj(obj)
-        # attributes are number from 1 onwards
-        obj_var.flags[attr - 1] = 0
+        # attributes are numbered from 0 onwards
+        obj_var.flags[attr] = 0
         # Encode object
-        self.memory.set_obj(obj_var, obj)
+        self.memory.set_obj(obj, obj_var)
 
     def put_prop(self, obj, prop, a):
         # Set prop on obj to a. The property must be present on the object(property is in property list? or flag == 1?)
@@ -504,22 +489,22 @@ class Interpreter():
         obj_var = self.memory.get_obj(obj)
         properties = self.memory.get_properties(obj_var.properties_add)
         try:
-            obj_prop = properties[prop]    
-            assert (len(obj_prop) <= 2), "Property length is greater than 2 bytes"
+            obj_prop = properties[prop]
+            assert (len(obj_prop) <= 2), "Property " + str(obj_prop) + " of " + properties['name'] + " is greater than 2 bytes"
+            self.store(result, obj_prop)
         except KeyError:
             # Property not present on obj, get default 
-            obj_prop = self.memory.loadw(self.memory.prop_defaults, prop)
-        self.store(result, obj_prop)
+            # properties are numbered from 1
+            self.loadw(result, self.memory.prop_defaults, prop - 1)
 
     def get_prop_addr(self, result, obj, prop):
         obj_var = self.memory.get_obj(obj)
         properties = self.memory.get_properties(obj_var.properties_add)
         try:
             obj_prop = properties[prop]    
-            assert (len(obj_prop) <= 2), "Property length is greater than 2 bytes"
         except KeyError:
             print("Property does not exist on the obj")
-        address = self.memory.get_properties(obj_var.properties_add, prop=prop, add=None)
+        address = self.memory.get_properties(obj_var.properties_add, prop=prop, add=True)
         self.store(result, address)
     
     def get_next_prop(self, result, obj, prop):
@@ -528,16 +513,17 @@ class Interpreter():
         # store as result
         obj_var = self.memory.get_obj(obj)
         properties = self.memory.get_properties(obj_var.properties_add)
-        sorted_properties = [(i, a(i)) for i in sorted(properties)]
         if prop == 0:
-            obj_prop = sorted_properties[len(sorted_properties) - 1]
+            temp = 0
+            for key in properties:
+                if key > temp:
+                    temp = key
         else:
-            value = properties[prop]
-            for i in range(i):
-                if value == sorted_properties[i]:
-                    value = sorted_properties[i + 1]
-                    break
-        self.store(result, value)
+            temp = 0
+            for key in properties:
+                if key < prop and key > temp:
+                    temp = key
+        self.store(result, temp)
 
     def get_prop_len(self, result, baddr):
         prop_len = self.memory.get_prop_len(baddr)
@@ -617,17 +603,37 @@ class Interpreter():
         self.istream = n
 
 # Input
-    def read(self, baddr1, baddr2, time=None, result=None):
+    def read(self, baddr1, baddr2, time=None, raddr=None, result=None):
         # refresh status bar
-        # read in char from current input stream (mouse not implemented)
-        stream = input()
-        # tokenise
+        stream = None
+        if time != None and raddr != None:
+            timer = threading.Timer(time/10, thread.interrupt_main)
+            # read in char from current input stream (mouse not implemented)
+            try:
+                timer.start()
+                stream = input()
+            except KeyboardInterrupt:
+                # CHECK
+                # if result is zero vs non zero
+                self.call(raddr, result=result, ret="interrupt", n=0)
+            timer.cancel()    
+        else:
+            stream = input()
+
+        stream = stream.lower()
+        self.memory.read(baddr1, baddr2, stream)
+        if not (self.ver_num in [5, 6] and baddr2 == 0):
+            self.memory.tokenise(baddr1, baddr2)
         # if status bar is present, show_status()
+        # in v5+ the result is the terminating char
+        if self.ver_num in [5, 6]:
+            # newline is always a terminating character
+            self.store(result, 13)
     
-    def read_t(self, baddr1, baddr2, time=None):
+    def read_t(self, baddr1, baddr2, time=None, raddr=None):
         self.read(baddr1, baddr2, time)
 
-    def read_w(self, result, baddr1, baddr2, time=None):
+    def read_w(self, result, baddr1, baddr2, time=None, raddr=None):
         self.read(baddr1, baddr2, time, result)
 
     def read_char(self, one, time=None, raddr=None):
@@ -635,28 +641,38 @@ class Interpreter():
 
 # Character based output
     def print_char(self, n):
-        warnings.warn("Not implemented")
+        self.print_(chr(n))
     
     def new_line(self):
-        warnings.warn("Not implemented")
+        self.print_("\n")
     
     def print_(self, string):
-        print(string)
+        if self.ostream[0] == True:
+            print(string, end="")
+        elif self.ostream[2] == True:
+            print("Reading to memory")
 
     def print_rtrue(self, string):
-        warnings.warn("Not implemented")
+        self.print_(string)
+        self.new_line()
+        self.rtrue()
 
     def print_addr(self, baddr):
-        warnings.warn("Not implemented")
+        string = self.memory.get_string(baddr)
+        self.print_(string)
 
     def print_paddr(self, saddr):
-        warnings.warn("Not implemented")
+        string = self.memory.get_string(saddr)
+        self.print_(string)
 
     def print_num(self, s):
-        warnings.warn("Not implemented")
+        self.print_(str(s))
 
     def print_obj(self, obj):
-        warnings.warn("Not implemented")
+        obj_var = self.memory.get_obj(obj)
+        properties_add = obj_var.properties_add
+        properties = self.memory.get_properties(properties_add)
+        self.print_(properties["name"]) 
 
     def print_table(self, baddr, x, y=None, n=None):
         warnings.warn("Not implemented")
@@ -683,7 +699,7 @@ class Interpreter():
     def erase_picture(self, pic, y=None, x=None):
         warnings.warn("Not implemented")
 
-    def picture_data(self, branch, n, baddr):
+    def picture_data(self, is_reversed, offset, n, baddr):
         warnings.warn("Not implemented")
 
     def picture_table(self, baddr):
@@ -699,11 +715,11 @@ class Interpreter():
     def mouse_window(self, window):
         warnings.warn("Not implemented")
 
-    def make_menu(self, branch, n, baddr):
+    def make_menu(self, is_reversed, offset, n, baddr):
         warnings.warn("Not implemented")
         
 # Save, restore, undo
-    def save_b(self, branch):
+    def save_b(self, is_reversed, offset):
         warnings.warn("Not implemented")
 
     def save_r(self, result):
@@ -712,7 +728,7 @@ class Interpreter():
     def save(self, result, baddr1=None, n=None, baddr2=None):
         warnings.warn("Not implemented")
 
-    def restore_b(self, branch):
+    def restore_b(self, is_reversed, offset):
         warnings.warn("Not implemented")
     
     def restore_r(self, result):
@@ -729,10 +745,18 @@ class Interpreter():
 
 # Miscellaneous
     def nop(self):
-        warnings.warn("Not implemented")
+        pass
 
     def random(self, result, s):
-        warnings.warn("Not implemented")
+        if s > 0:
+            value = random.randint(1, s)
+        if s < 0:
+            random.seed(s)
+            value = random.randint(1, 32767)
+        elif s == 0:
+            value = random.randint(1, 32767)
+        # should the result arg always be 0?
+        self.store(0, s)
 
     def restart(self):
         warnings.warn("Not implemented")
@@ -743,24 +767,26 @@ class Interpreter():
     def show_status(self):
         warnings.warn("Not implemented")
     
-    def verify(self, branch):
-        warnings.warn("Not implemented")
+    def verify(self, is_reversed, offset):
+        condition = self.memory.verify()
+        self.branch(condition, is_reversed, offset)
 
-    def piracy(self, branch):
-        warnings.warn("Not implemented")
+    def piracy(self, is_reversed, offset):
+        # always branch since condition is not specified
+        self.jump(offset)
 
     def tokenise(self, baddr1, baddr2, baddr3=None, bit=None):
-        warnings.warn("Not implemented")
+        self.memory.tokenise(baddr1, baddr2, baddr3, bit)
 
-    def encode_text(self, badd1, n, p, baddr2):
-        warnings.warn("Not implemented")
+    def encode_text(self, baddr1, n, p, baddr2):
+        self.memory.encode_text(baddr1, n, p, baddr2)
 
 # =============================================================================
 # End of Class
 # =============================================================================
 
-# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
-file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
+file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/zork1.z5'
+# file_name = '/Users/kaizhe/Desktop/Telegram/ifbot/games/hhgg.z3'
 
 # opens file in binary
 file = open(file_name, "rb")
