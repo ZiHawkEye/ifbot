@@ -77,16 +77,16 @@ class Interpreter():
                     operands[i] = temp if type(temp) == int else self.memory.get_num(temp)
                     assert (operands[i] < 2 ** 16), "Unsigned variables are 16 bit, not " + str(operands[i])
                     # UNDO
-                    print("op: " + str(operands[i]) + " var: " + str(var))
+                    # print("op: " + str(operands[i]) + " var: " + str(var))
 
             # updates program counter 
             # this ensures that the program counter is not affected by the execution of instructions except for call instructions
             self.cur_frame.set_pc(self.memory.get_pc())
             # UNDO
-            print('0x{0:02x}'.format(self.cur_frame.get_pc()))
+            # print('0x{0:02x}'.format(self.cur_frame.get_pc()))
             # executes
             # UNDO
-            print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
+            # print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
             try:
                 instr_function = getattr(self, instr.name)
             except AttributeError:
@@ -145,12 +145,12 @@ class Interpreter():
 
     def loadw(self, result, baddr, n):
         value = self.memory.loadw(baddr, n)
-        assert (len(value) == 2 and type(value[0]) == bytes), "Incorrect format of value in loadw"
+        assert (len(value) == 2 and type(value[0]) == int), "Incorrect format of value in loadw"
         self.store(result, value)
 
     def loadb(self, result, baddr, n):
         value = self.memory.loadb(baddr, n)
-        assert(len(value) == 1 and type(value) == bytes), "Incorrect format of value in loadb"
+        assert(type(value) == int), "Incorrect format of value in loadb"
         self.store(result, value)
 
     def pull(self, var):
@@ -762,7 +762,7 @@ class Interpreter():
         warnings.warn("Not implemented")
     
     def quit(self):
-        warnings.warn("Not implemented")
+        raise KeyboardInterrupt
     
     def show_status(self):
         warnings.warn("Not implemented")
@@ -787,8 +787,8 @@ class Interpreter():
 
 path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
 
-file_name = path + 'zork1.z5'
-# file_name = path + 'hhgg.z3'
+# file_name = path + 'zork1.z5'
+file_name = path + 'hhgg.z3'
 
 # opens file in binary
 file = open(file_name, "rb")

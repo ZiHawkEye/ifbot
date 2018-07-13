@@ -160,13 +160,13 @@ print("test_attr() success")
 machine.put_prop(obj=1, prop=16, a=42)
 obj1_var = machine.memory.get_obj(1)
 properties = machine.memory.get_properties(obj1_var.properties_add)
-assert(properties[16][0] == bytes([42])), "Error"
+assert(properties[16][0] == 42), "Error"
 print("put_prop() success")
 
 # dependent on story file
 machine.get_prop(result=0, obj=1, prop=16)
 prop = machine.pop()
-assert(prop[0] == bytes([42])), "Error"
+assert(prop[0] == 42), "Error"
 print("get_prop() success")
 
 # dependent on story file
@@ -174,7 +174,7 @@ machine.get_prop_addr(result=0, obj=1, prop=16)
 prop_add = machine.pop()
 machine.loadb(result=0, baddr=prop_add, n=1)
 prop = machine.pop()
-assert(prop == bytes([42])), "Error" 
+assert(prop == 42), "Error" 
 print("get_prop_addr success")
 
 # dependent on story file
