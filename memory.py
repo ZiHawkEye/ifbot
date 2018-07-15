@@ -56,10 +56,10 @@ class Memory():
         n = self.memory[dict_header]
         self.sep_start = dict_header + 1
         # converts each byte to ascii code
-        self.separators = [value for value in self.memory[self.sep_start:self.sep_start + n]]
+        self.separators = self.memory[self.sep_start:self.sep_start + n]
         self.entry_length = self.memory[self.sep_start + n]
         num_start = self.sep_start + n + 1
-        self.num_of_entries = self.memory[num_start:num_start + 2]
+        self.num_of_entries = self.get_num(self.memory[num_start:num_start + 2])
         self.dict = self.sep_start + n + 3
         
         # property defaults table before object table
@@ -152,7 +152,6 @@ class Memory():
                     self.memory[baddr2 + i] = self.memory[baddr1 + i]
             
             elif s > 0:
-                # checks if tables overlap
                 # if tables overlap then copy backwards to avoid corruption
                 # otherwise copy forwards by default
                 if baddr1 < baddr2 and baddr1 + s > baddr2:
@@ -279,42 +278,53 @@ class Memory():
             # should have a 0 terminating char at the end
             start = baddr1 + 1
             end = start
-            byte = self.memory[address]
-            while byte != 0:
+            while self.memory[end] != 0:
                 end += 1
-                byte = self.memory[address]
             size = end - start
         elif self.ver_num in [5, 6]:
             size = self.memory[baddr1 + 1]
             start = baddr + 2
         # look for tokens
         n = 0
-        tokens = []
-        dict_adds = []
-        ps = []
-        ns = []
+        positions = []
+        lens = []
         for p in range(size):
             n += 1
-            ascii_code = self.memory[i]
+            ascii_code = self.memory[start + p]
             if ascii_code in self.separators:
                 # tokenise separator chars individually
-                ps.append(p - 1)
-                ns.append(n - 1)
-                token = self.encode_text(baddr1, n - 1, p - 1)
-                ps.append(p)
-                ns.append(1)
-                sep_token = ascii_code
+                token_len = n - 1
+                token_end = p - 1
+                token_start = token_end - (token_len - 1)
+                positions.append(token_start)
+                lens.append(token_len)
+                token_len = 1
+                token_end = p
+                start_token = token_start - (token_len - 1)
+                positions.append(token_len)
+                lens.append(token_start)
                 n = 0
-                tokens.append(token)
-                tokens.append(sep_token)
             elif ascii_code == 32:
                 # ignore spaces
-                ps.append(p - 1)
-                ns.append(n - 1)
-                token = self.encode_text(baddr1, n - 1, p - 1)
+                token_len = n - 1
+                token_end = p - 1
+                token_start = token_end - (token_len - 1)
+                positions.append(token_start)
+                lens.append(token_len)        
                 n = 0
-                tokens.append(token)
-        
+        # saves last token
+        token_len = n
+        token_end = size - 1
+        token_start = token_end - (token_len - 1)
+        positions.append(token_start)
+        lens.append(token_len)   
+ 
+        tokens = []
+        # encodes tokens
+        for i in range(len(positions)):
+            token = self.encode_text(start, lens[i], positions[i])
+            tokens.append(token)
+        dict_adds = []
         for token in tokens:
             # looks up token in separators
             for i in range(len(self.separators)):
@@ -340,20 +350,21 @@ class Memory():
                     break
             if not is_found:
                 dict_adds.append(0)
-            
-            # creates parse buffer
-            # creates block for each token
-            for i in range(len(tokens)):
-                if dict_adds[i] == 0 and bit != 0:
-                    pass
-                else:
-                    dict_byte_add = self.get_bytes(dict_adds[i], 2)
-                    n_byte = bytes([ns[i]])
-                    p_byte = bytes([ps[i]])
-                    block = [dict_byte_add] + [n_byte] + [p_byte]
-                    # write block to parse buffer
-                    address = baddr2 + (i * 4)
-                    self.memory[address:address + 4]
+        # UNDO
+        print(tokens, dict_adds)
+        # creates parse buffer
+        # creates block for each token
+        for i in range(len(tokens)):
+            if dict_adds[i] == 0 and bit != 0:
+                pass
+            else:
+                dict_byte_add = self.get_bytes(dict_adds[i], 2)
+                len_byte = lens[i]
+                position_byte = positions[i]
+                block = [dict_byte_add] + [len_byte] + [position_byte]
+                # write block to parse buffer
+                address = baddr2 + (i * 4)
+                self.memory[address:address + 4]
         
     def encode_text(self, baddr1, n, p, baddr2=None):
         zchars = []
@@ -361,14 +372,17 @@ class Memory():
         charlist = self.memory[start:start + n]
         # maps each char to a zscii code
         for char in charlist:
-            for shift in range(0, 3):
-                for zcode in range(6, 31):
-                    if char == ord(self.help.char_map[shift][zcode]):
-                        if shift == 0:
-                            zchars.append(zcode)
-                        else:
-                            zchars.append(shift)
-                            zchars.append(zcode)
+            if char in self.separators:
+                return char
+            else:
+                for shift in range(0, 3):
+                    for zcode in range(6, 31):
+                        if char == ord(self.help.char_map[shift][zcode]):
+                            if shift == 0:
+                                zchars.append(zcode)
+                            else:
+                                zchars.append(shift)
+                                zchars.append(zcode)
         
         # convert every 3 zchars into a word
         zstring = []
@@ -380,12 +394,13 @@ class Memory():
             max_len = 9
         for i in range(0, max_len, 3):
             # each zword has a bit, followed by 3 5 bit sequences
+            zword = 0
             for j in range(3):
                 try:
-                    zword += zchars[i + j] << position[j]
+                    zword += (zchars[i + j] << position[j])
                 except IndexError:
                     # add padding
-                    zword += 5 << positionp[j]
+                    zword += (5 << position[j])
             zstring.append(zword >> 8)
             zstring.append(zword - (zword >> 8 << 8))
         # insert terminating character
@@ -441,20 +456,23 @@ class Memory():
     # joins multiple int elements
     def get_num(self, int_list, signed=False):
         num = 0
+        size = 1
         if type(int_list) == int:
             num = int_list
-            assert (num < 1 << 8), "num should be 1 byte"
+            # CHECK (encounters error when pulling from stack)
+            # assert (num < 1 << 8), "num should be 1 byte"
         else:
+            size = len(int_list)
             for int_8 in int_list:
                 num = (num << 8) + int_8
 
-        # checks if num is signed 
+        # if num is signed 
         if signed == True:
-            if num >> 15 == 0:#if the top bit is 0, num is unsigned            
+            if num >> (size*8 - 1) == 0:#if the top bit is 0, num is unsigned            
                 return num 
             else:
                 # CHECK
-                return num - 2 ** 16 
+                return num - (2 ** (size*8)) 
         else:
             return num
 
@@ -527,7 +545,7 @@ class Memory():
             for i in range(1, 4):
                 zlist.append(zword[i])
               
-            # checks for terminating condition
+            # terminating condition
             if zword[0] == 1 or (address + 2) > len(self.memory):
                 break
                 
@@ -538,7 +556,7 @@ class Memory():
         i = 0
         while i < len(zlist):
             zchar = zlist[i]
-            # check if special chars are inside and act accordingly
+            # if special chars are inside act accordingly
             is_upper = ((self.ver_num in [1, 2] and
                             zchar in [2, 3, 4, 5]) or
                             (self.ver_num in [3, 4, 5, 6, 7, 8] and
@@ -567,8 +585,8 @@ class Memory():
                 long_zchar = (a << 5) + b
                 # convert to little endian?
                 i += 2
-                assert (type(long_zchar) == str), "What to do with literal output characters in get_string()?"
-                charlist.append(long_zchar)
+                # CHECK
+                charlist.append(chr(long_zchar))
                 
 # =============================================================================
 # When we encounter A2-06, we read two more Z-characters,
@@ -592,11 +610,10 @@ class Memory():
                 word_address = self.get_word_address(self.memory[wa_index:wa_index + 2])
                 
                 # finds the z string and appends it to charlist
-                temp = self.get_string(word_address)#CHECK IM NOT SURE
+                temp = self.get_string(word_address)
                 charlist.append(temp)
             
             else:
-                # CHECK IM NOT SURE
                 # does not use the algorithm involving shift and lock keys
                 # maps zscii to characters(depends on the zmachine version)
                 ascii_char = self.map_zscii(zchar, shift=shift)
@@ -780,7 +797,7 @@ class Memory():
         # Set prop on obj to a. The property must be present on the object(property is in property list? or flag == 1?)
         obj_var = self.get_obj(obj)
         properties = self.get_properties(obj_var.properties_add)
-        # Check if property is present on object and set it to a
+        # if property is present on object set it to a
         try:
             # this may not be necessary
             # assert (obj_var.flags[prop] == 1), "Attribute flag is not set to 1 - object does not have property"
@@ -791,8 +808,6 @@ class Memory():
             print("a should be byte-valued for put_prop(obj, prop, a)")
         # iterate through properties until specifed property is found, then return address
         prop_add = self.get_properties(obj_var.properties_add, prop=prop)
-        # CHECK
-        # need some way to test
         # modify property - is it necessary to change size byte of property block? 
         # No, it is not recommended to change the property length in the size byte
         self.memory[prop_add] = a
@@ -872,8 +887,6 @@ class Memory():
         # get opcode number of opcode in int
         op_num = self.get_op_num(byte, form)
         
-        # it is an error for a variable instr with 2op code to not have 2 operands
-        # unless it is op_code: 2op:1 (CHECK not accounted for)
         # get operand count of opcode: 0:0OP, 1:1OP, 2:2OP or 3:VAR
         op_count = self.get_op_count(byte, form)
 
@@ -922,11 +935,6 @@ class Memory():
         
         operands = self.get_operands(op_start, types)
 
-        # if op_count is 0 - 2, number of elems in types and operands == op_count
-        if op_count in range(0, 3):
-            assert (op_count == len(types)), 'Number of types does not equal op count (0OP, 1OP, 2OP)'
-            assert (op_count == len(operands)), 'Number of operands does not equal op count (0OP, 1OP, 2OP)'
-
         # KIND(deduced from form, op count), op num
         # KIND(0:0OP, 1:1OP, 2:2OP, 3:VAR, 4:EXT)
         kind = 0
@@ -938,8 +946,13 @@ class Memory():
         # maps instruction to kind and op_num
         instr_details = self.help.op_table[kind][op_num] # instr_details is of type dict
         assert (instr_details != {}), "Not a valid instruction at " + '0x{0:02x}'.format(pc)
-        # UNDO
-        # print(str(instr_details))
+
+        # it is an error for a variable instr with 2op code to not have 2 operands
+        # unless it is op_code: 2op:1
+        # if op_count is 0 - 2, number of elems in types and operands == op_count
+        if op_count in range(0, 3) and instr_details['name'] != "je":
+            assert (op_count == len(types)), 'Number of types does not equal op count (0OP, 1OP, 2OP) for ' + instr_details['name']
+            assert (op_count == len(operands)), 'Number of operands does not equal op count (0OP, 1OP, 2OP) for ' + instr_details['name']
 
         # reads in other data and initializes Instruction obj containing decoded arguments and function reference
         # if multiple arguments are specified, which one is read first?
@@ -960,12 +973,12 @@ class Memory():
 
         if instr_details["is_br"] == True:
             # the branch argument is always the last of the sequence of arguments
-            # checks bit 2 to see if branch arg is 1 or 2 bytes
+            # get bit 2 to see if branch arg is 1 or 2 bytes
             int_byte = self.memory[self.pc]
             # gets bit 2
             one = (int_byte >> 7)
             two = (int_byte >> 6) - (one << 1)
-            # checks if reverse logic
+            # bit 1 determines if logic is reversed
             is_reversed = True if one == 0 else False
             is_one = True if (two == 1) else False
             br_arg_byte = self.memory[self.pc] if is_one else self.memory[self.pc: self.pc + 2]
@@ -981,47 +994,11 @@ class Memory():
             self.pc = self.pc + 1 if is_one else self.pc + 2
 
         # program counter should point to end of instruction at this point
-
-        # data conversion for operands
-        op_types = instr_details["types"]
-        if op_types != []:
-            for i in range(len(operands)):
-                opt = op_types[i]
-                op = operands[i]
-                
-                if opt == "s" or opt == "t":
-                    operands[i] = self.get_num(op, signed=True)
-                elif opt == "bit":
-                    pass
-                elif opt == "byte":
-                    pass
-                elif opt == "var":
-                    assert (op < 1 << 8), "Variable number operand is not 1 byte"
-                elif opt == "baddr":
-                    operands[i] = self.get_byte_address(op)
-                elif opt == "raddr":
-                    operands[i] = self.get_packed_address(op, is_routine_call=True)
-                elif opt == "saddr":
-                    operands[i] = self.get_packed_address(op, is_print_paddr=True)
-                elif opt == "obj":
-                    pass
-                elif opt == "attr":
-                    pass
-                elif opt == "prop":
-                    pass
-                elif opt == "window":
-                    pass
-                elif opt == "time":
-                    pass
-                elif opt == "pic":
-                    pass
-                else:
-                    operands[i] = self.get_num(op)
-
+        # data conversion for operands occurs in interpreter
         # initializes instr obj with values/args
-        # types may not be necessary for execution
         name = instr_details['name']
-        instr = Instruction(name, types, operands, str_arg, res_arg, is_reversed, offset)
+        op_types = instr_details["types"]
+        instr = Instruction(name, types, op_types, operands, str_arg, res_arg, is_reversed, offset)
         return instr
         
     # gets format of opcode and returns the corresponding int

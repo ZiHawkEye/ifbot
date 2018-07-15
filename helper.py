@@ -62,7 +62,7 @@ class Helper():
 class Instruction():
     # initiated by ver num, kind, op_num
     # should contain mnemonic, operands and args
-    def __init__(self, name, types, operands, str_arg, res_arg, is_reversed, offset):
+    def __init__(self, name, types, op_types, operands, str_arg, res_arg, is_reversed, offset):
         # use * before an iterable to expand it before a function call
         self.name = name
         self.arguments = []
@@ -75,6 +75,7 @@ class Instruction():
             self.arguments.append(offset)
         self.operands = operands
         self.types = types
+        self.op_types = op_types
 
 class Object():
     def __init__(self, flags, parent, sibling, child, properties_add):

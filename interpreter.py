@@ -59,34 +59,53 @@ class Interpreter():
 
     def start(self):
         # start to execute instructions
-        for i in range(200):
+        for i in range(300):
             self.cur_frame = self.stack[-1]
             instr = self.memory.get_instr(self.cur_frame.get_pc())
             # converts unsigned numbers to variable numbers
             operands = instr.operands
             types = instr.types
+            op_types = instr.op_types
+            # UNDO
+            # print(instr.name)
             for i in range(len(operands)):
                 # checks if operand is an unsigned variable num - for instructions that may take it either variable or unsigned operands
-                if types[i] == 2:
-                    var = operands[i]
+                op = operands[i]
+                typ = types[i]
+                opt = op_types[i]
+                if typ == 2:
+                    var = op    
                     # moves value from variable to top of routine stack
-                    self.load(0, operands[i])
+                    self.load(0, var)
                     # pops routine stack
-                    temp = self.pop()
-                    # converts to unsigned int
-                    operands[i] = temp if type(temp) == int else self.memory.get_num(temp)
-                    assert (operands[i] < 2 ** 16), "Unsigned variables are 16 bit, not " + str(operands[i])
+                    op = self.pop()
                     # UNDO
-                    # print("op: " + str(operands[i]) + " var: " + str(var))
+                    # print("op: " + str(op) + " var: " + str(var))
+                # data conversion for all operands
+                if opt in ["bit", "byte",
+                                "obj", "attr", "prop",
+                                "window", "time", "pic"]:
+                    pass
+                elif opt == "s" or opt == "t":
+                    operands[i] = self.memory.get_num(op, signed=True)
+                elif opt == "var":
+                    assert (op < 1 << 8), "Variable number operand is not 1 byte"
+                elif opt == "baddr":
+                    operands[i] = self.memory.get_byte_address(op)
+                elif opt == "raddr":
+                    operands[i] = self.memory.get_packed_address(op, is_routine_call=True)
+                elif opt == "saddr":
+                    operands[i] = self.memory.get_packed_address(op, is_print_paddr=True)
+                else:
+                    operands[i] = self.memory.get_num(op)                    
 
             # updates program counter 
             # this ensures that the program counter is not affected by the execution of instructions except for call instructions
             self.cur_frame.set_pc(self.memory.get_pc())
             # UNDO
             # print('0x{0:02x}'.format(self.cur_frame.get_pc()))
-            # executes
-            # UNDO
             # print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
+            # executes
             try:
                 instr_function = getattr(self, instr.name)
             except AttributeError:
@@ -215,12 +234,14 @@ class Interpreter():
         self.inc(var)
         self.load(0, var)
         temp = self.pop()
+        temp = temp if type(temp) == int else self.memory.get_num(temp)
         self.jg(is_reversed, offset, temp, s)
 
     def dec_jl(self, is_reversed, offset, var, s):
         self.dec(var)
         self.load(0, var)
         temp = self.pop()
+        temp = temp if type(temp) == int else self.memory.get_num(temp)
         self.jl(is_reversed, offset, temp, s)
 
     def or_(self, result, a, b):
@@ -434,6 +455,8 @@ class Interpreter():
             sibling_before = cur_sibling
             # close the sibling chain
             sibling_before.sibling = obj_var.sibling
+            # encode changes
+            self.memory.set_obj(sibling_num, sibling_before)
         else:
             parent.child = obj_var.sibling
         # obj has no parents and siblings
@@ -441,7 +464,6 @@ class Interpreter():
         obj_var.sibling = 0
         # encodes changes
         self.memory.set_obj(obj_var.parent, parent)
-        self.memory.set_obj(sibling_num, sibling_before)
         self.memory.set_obj(obj, obj_var)
 
     def insert_obj(self, obj1, obj2):
@@ -618,7 +640,7 @@ class Interpreter():
                 self.call(raddr, result=result, ret="interrupt", n=0)
             timer.cancel()    
         else:
-            stream = input()
+            stream = input("Input: ")
 
         stream = stream.lower()
         self.memory.read(baddr1, baddr2, stream)
