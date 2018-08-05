@@ -5,10 +5,17 @@ class Frame():
         self.localvars = localvars[:]
         self.routine_stack = []
         self.result = result
+        # UNDO
+        # print("localvars: " + str(localvars))
 
     def get_pc(self):
         return self.pc
     
+    def get_localvars(self):
+        # UNDO
+        # print("localvars: " + str(self.localvars))
+        return self.localvars
+
     def get_localvar(self, var):
         assert (var >= 1 and var <= 15), "There are only up to 15 local variables per frame"
         return self.localvars[var - 1]
@@ -46,7 +53,7 @@ class Frame3(Frame):
 
 class Frame5(Frame3): 
     def __init__(self, pc, localvars, ret, n, result=None, framep=None):
-        Frame3.init(self, pc, localvars, ret, result)
+        Frame3.__init__(self, pc, localvars, ret, result)
         self.n = n
         self.framep = framep
 

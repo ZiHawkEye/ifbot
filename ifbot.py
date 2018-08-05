@@ -6,14 +6,11 @@ Created on Mon Mar 19 11:58:56 2018
 """
 from telegram.ext import CommandHandler, MessageHandler, Filters
 import os
+import sys
+from io import StringIO
+from interpreter import Interpreter
 
-#Process of interaction(how do i represent this as a decision tree? or as a class?)
 #swap out handlers as appropriate? use them in if conditions - need to use functions as objs
-#/start gives 2 choices, start new game, continue saved game
-#pick a game: shows list of games from folder 
-#game chosen, game starts
-
-
 
 # List storing Handler objects
 handlers = []
@@ -50,23 +47,20 @@ handlers.append(CommandHandler("help", help))
 
 #starts a new game if bot is awake and no game is running
 def n(bot, update):
-    global isStart, inProgress
+    global isStart, game
     
     if isStart == True:
-        if inProgress == False:        
-            inProgress = True
+        if game == None:        
             update.message.reply_text('New game started, please choose a game')
             
             #returns list of games available
-            path = "C:/Users/User/Desktop/TelegramBot/ifbot/games"
+            path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
             dirs = os.listdir(path)
             for file in dirs:
                 update.message.reply_text(file)
-
-        elif inProgress == True:
+        else:
             update.message.reply_text('Sorry, you are already playing a game. /end '
                                       'to end current game')
-
     else:
         update.message.reply_text('zzz...')
     
@@ -74,27 +68,24 @@ handlers.append(CommandHandler("n", n))
 
 #continues saved game if bot is awake and no game is running
 def c(bot, update):
-    global isStart, inProgress
+    global isStart, game
     
     if isStart == True:
-        if inProgress == False:
-            inProgress = True
+        if game == None:
             update.message.reply_text('You have chosen to continue a previous game, '
                                       'please choose a game')
             
             #returns list of saved files in folder
-            path = "C:/Users/User/Desktop/TelegramBot/ifbot/saves"
+            path = '/Users/kaizhe/Desktop/Telegram/ifbot/saves/'
             dirs = os.listdir(path)
             for file in dirs:
                 update.message.reply_text(file)
             
             #save file should contain the file address of the 
             #story and all the actions taken by the user (use qwertzal)
-
-        elif inProgress == True:
+        else:
             update.message.reply_text('Sorry, you are already playing a game. /end '
                                       'to end current game')
-
     else:
         update.message.reply_text('zzz...')
     
@@ -103,17 +94,16 @@ handlers.append(CommandHandler("c", c))
 
 #ends game if bot is awake and game is running
 def end(bot, update):
-    global isStart, inProgress
+    global isStart, game
     
     if isStart == True:
-        if inProgress == False:        
+        if game == None:        
             update.message.reply_text('There is no game in progress')
             #return list of saved games
 
-        elif inProgress == True:
-            inProgress = False
+        else:
+            game = None
             update.message.reply_text('Game ended')
-
     else:
         update.message.reply_text('zzz...')
     
@@ -122,13 +112,29 @@ handlers.append(CommandHandler("end", end))
 # Non-command handlers
 #filters out text messages
 def foo(bot, update):
-    global isStart
+    global isStart, game
     
     if isStart == True:
-        #stores the text message in string variable 'message'
-        message = update.message.text
-        update.message.reply_text("I don't understand " + message)
-    
+        if game == None:
+            message = update.message.text
+            path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
+            dirs = os.listdir(path)
+            if message in dirs:
+                # redirect print to file
+                f1 = sys.stdin
+                f = StringIO()
+                sys.stdin = f
+                game = message
+                file_name = path + game
+                file = open(file_name, "rb")
+                machine = Interpreter(file)
+                try:
+                    machine.start(0)
+                except:
+                    raise
+        else:
+            message = update.message.text
+            
     else:
         update.message.reply_text('zzz')
     

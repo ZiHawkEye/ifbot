@@ -83,7 +83,7 @@ def make_table(ver_num):
     ops(op_table,     1, 6,  'dec',                                     types=["var"])
     ops(op_table,     1, 7,  'print_addr',                              types=["baddr"])
     
-    if ver_num == 4:
+    if ver_num >= 4:
         ops(op_table, 1, 8,  'call_f0',        is_res=True,             types=["raddr"])
     else:
         ops(op_table, 1, 8,  is_null=True)
@@ -118,15 +118,15 @@ def make_table(ver_num):
     ops(op_table,     2, 13, 'store',                                   types=["var", "u"])
     ops(op_table,     2, 14, 'insert_obj',                              types=["obj", "obj"])
     ops(op_table,     2, 15, 'loadw',          is_res=True,             types=["baddr", "u"])
-    ops(op_table,     2, 16, 'loadb',          is_res=True,             types=["obj", "u"])
+    ops(op_table,     2, 16, 'loadb',          is_res=True,             types=["baddr", "u"])
     ops(op_table,     2, 17, 'get_prop',       is_res=True,             types=["obj", "prop"])
     ops(op_table,     2, 18, 'get_prop_addr',  is_res=True,             types=["obj", "prop"])
     ops(op_table,     2, 19, 'get_next_prop',  is_res=True,             types=["obj", "prop"])
-    ops(op_table,     2, 20, 'add',            is_res=True,             types=["u", "u"])
-    ops(op_table,     2, 21, 'sub',            is_res=True,             types=["u", "u"])
-    ops(op_table,     2, 22, 'mul',            is_res=True,             types=["u", "u"])
-    ops(op_table,     2, 23, 'div',            is_res=True,             types=["u", "u"])
-    ops(op_table,     2, 24, 'mod',            is_res=True,             types=["u", "u"])
+    ops(op_table,     2, 20, 'add',            is_res=True,             types=["s", "t"])
+    ops(op_table,     2, 21, 'sub',            is_res=True,             types=["s", "t"])
+    ops(op_table,     2, 22, 'mul',            is_res=True,             types=["s", "t"])
+    ops(op_table,     2, 23, 'div',            is_res=True,             types=["s", "t"])
+    ops(op_table,     2, 24, 'mod',            is_res=True,             types=["s", "t"])
     
     if ver_num >= 4:
         ops(op_table, 2, 25, 'call_f1',        is_res=True,             types=["raddr", "u"])

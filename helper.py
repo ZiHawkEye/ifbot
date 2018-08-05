@@ -17,29 +17,29 @@ class Helper():
         # memory addresses
         # memory addresses for starts and ends of dynamic, static,
         # high memory
-        self.dyn_end_add = int.from_bytes(b'\x0e', byteorder='big')
-        self.hi_start_add = int.from_bytes(b'\x04', byteorder='big')
+        self.dyn_end_add = 0x0e
+        self.hi_start_add = 0x04
         
         # memory address storing byte address to initialize program counter
-        self.pc_add = int.from_bytes(b'\x06', byteorder='big')
+        self.pc_add = 0x06
         
         # address for abbrev table
-        self.abbrev_add = int.from_bytes(b'\x18', byteorder='big')
+        self.abbrev_add = 0x18
         
         # address for object table (starts with property defaults table, then lists objects)
-        self.obj_add = int.from_bytes(b'\x0a', byteorder='big')
+        self.obj_add = 0x0a
         self.obj_size = 9 if self.ver_num in [1, 2, 3] else 14
 
         # address for dictionary
-        self.dict_add = int.from_bytes(b'\x08', byteorder='big')
+        self.dict_add = 0x08
         
         # address for global variables
-        self.gvar_add = int.from_bytes(b'\x0c', byteorder='big')
+        self.gvar_add = 0x0c
 
         # (only for versions 6 and 7) the routine and string offsets
         if self.ver_num in [6,7]:
-            self.ro_add = int.from_bytes(b'\x28', byteorder='big')            
-            self.so_add = int.from_bytes(b'\x2a', byteorder='big')
+            self.ro_add = 0x28          
+            self.so_add = 0x2a
         
         
         # zscii strings - need to introduce more for different zmachine vers
@@ -66,11 +66,16 @@ class Instruction():
         # use * before an iterable to expand it before a function call
         self.name = name
         self.arguments = []
+        self.args = {}
         if str_arg != None:
+            self.args["string"] = str_arg
             self.arguments.append(str_arg)
         if res_arg != None:
+            self.args["result"] = res_arg
             self.arguments.append(res_arg)
         if is_reversed != None and offset != None:
+            self.args["is_reversed"] = is_reversed
+            self.args["offset"] = offset
             self.arguments.append(is_reversed)
             self.arguments.append(offset)
         self.operands = operands

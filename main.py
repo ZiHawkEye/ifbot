@@ -11,6 +11,7 @@ import logging
 import ifbot
 
 # Authentication token
+# NOT SAFE
 token = "568205953:AAHvWcHW_KrMuyEs28-PMjaYkRMVPGv8FCE"
 
 # Enable logging
