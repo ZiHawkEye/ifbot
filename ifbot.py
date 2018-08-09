@@ -21,6 +21,11 @@ isStart = False
 # Checks if game is currently in progress
 inProgress = False
 
+machine = None
+game = None
+f = StringIO()
+f1 = sys.stdin
+
 # Command handlers
 # /start wakes the bot up if it isnt already awake
 def start(bot, update):
@@ -112,29 +117,40 @@ handlers.append(CommandHandler("end", end))
 # Non-command handlers
 #filters out text messages
 def foo(bot, update):
-    global isStart, game
-    
+    global isStart, machine, game, f, f1
+    message = update.message.text
     if isStart == True:
         if game == None:
-            message = update.message.text
             path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
             dirs = os.listdir(path)
             if message in dirs:
-                # redirect print to file
-                f1 = sys.stdin
-                f = StringIO()
                 sys.stdin = f
                 game = message
                 file_name = path + game
                 file = open(file_name, "rb")
-                machine = Interpreter(file)
+                machine = Interpreter(file, '')
                 try:
                     machine.start(0)
+                except KeyboardInterrupt:
+                    update.message.reply_text(machine.o)
+                    sys.stdin = f1
                 except:
+                    sys.stdin = f1
                     raise
         else:
-            message = update.message.text
-            
+            sys.stdin = f
+            f.seek(0)
+            f.write(message + '\n')
+            f.seek(0)
+            machine.o = ''
+            try:
+                machine.start(0, True)
+            except KeyboardInterrupt:
+                update.message.reply_text(machine.o)
+                sys.stdin = f1
+            except:
+                sys.stdin = f1
+                raise
     else:
         update.message.reply_text('zzz')
     

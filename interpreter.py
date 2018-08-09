@@ -8,6 +8,7 @@ Created on Wed Mar 21 22:09:06 2018
 #TODO
 # bugs
 # hello in zork
+# drink water, darkness in hhgg
 # i don't know the word
 # issues with read?
 #need some way to monitor the state of the game
@@ -22,9 +23,13 @@ from helper import *
 from frame import *
 from window import *
 from math import *
+import sys
 
 class Interpreter():
-    def __init__(self, file):        
+    def __init__(self, file, o=None):
+        # where output is stored
+        self.o = o
+                
         # represents story file/memory
         self.memory = Memory(file)
 
@@ -57,23 +62,30 @@ class Interpreter():
         self.stack.append(first_frame)
         self.cur_frame = first_frame
 
-    def start(self, n):
+    def start(self, n, has_input=False):
         if n == 0:
             while True:
-                self.run()
+                self.run(has_input)
+                has_input = False
         else:
             for i in range(n):
-                self.run()
+                self.run(has_input)
+                has_input = False
     
-    def run(self):
+    def run(self, has_input):
         # UNDO
         test = False
         self.cur_frame = self.stack[-1]
+        pc = self.cur_frame.get_pc()
         instr = self.memory.get_instr(self.cur_frame.get_pc())
         # updates program counter 
         # this ensures that the program counter is not affected by the execution of instructions except for call instructions
         self.cur_frame.set_pc(self.memory.get_pc())
-        
+        # UNDO
+        if instr.name in ['read', 'read_w', 'read_char'] and not has_input and self.o != None:
+            self.cur_frame.set_pc(pc)
+            raise KeyboardInterrupt
+
         # converts unsigned numbers to variable numbers
         for i in range(len(instr.operands)):
             # checks if operand is an unsigned variable num - for instructions that may take it either variable or unsigned operands
@@ -688,7 +700,10 @@ class Interpreter():
     
     def print_(self, string):
         if self.ostream[0] == True:
-            print(string, end="")
+            if self.o != None:
+                self.o = self.o + string
+            else:
+                print(string, end="")
         elif self.ostream[2] == True:
             print("Reading to memory")
 
@@ -824,17 +839,17 @@ class Interpreter():
 # End of Class
 # =============================================================================
 
-path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
+# path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
 
-# file_name = path + '905.z5'
-# file_name = path + 'zork1.z5'
-file_name = path + 'hhgg.z3'
+# # file_name = path + '905.z5'
+# # file_name = path + 'zork1.z5'
+# file_name = path + 'hhgg.z3'
 
-file = open(file_name, "rb")
+# file = open(file_name, "rb")
 
-machine = Interpreter(file)
+# machine = Interpreter(file)
 
-try:
-    machine.start(0)
-except:
-    raise 
+# try:
+#     machine.start(0)
+# except:
+#     raise 

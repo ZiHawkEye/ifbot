@@ -726,7 +726,13 @@ class Memory():
             # do nothing
             pass
         else:
-            self.memory[result['data_add']] = a
+            # if prop len is 1, then a should store only the least significant byte of the value
+            a = [a >> 8] + [0xff & a]
+            data_add = result['data_add']
+            if result['prop_len'] == 1:
+                self.memory[data_add] = a[1]
+            else:
+                self.memory[data_add:data_add + 2] = a 
 
     def get_next_prop(self, obj, prop):
         obj_var = self.get_obj(obj)
