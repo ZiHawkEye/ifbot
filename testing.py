@@ -2,8 +2,9 @@
 from interpreter import *
 
 path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
-file_name = path + 'zork1.z5'
+# file_name = path + 'zork1.z5'
 # file_name = path + 'hhgg.z3'
+file_name = path + '905.z5'
 
 # opens file in binary
 file = open(file_name, "rb")
@@ -94,44 +95,46 @@ assert (pc + 1 == new_pc), "Error"
 print("jump() success")
 
 # Objects
-obj_var = machine.memory.get_obj(1)
-flags = [value % 2 for value in range(32)]
-parent = 1
-sibling = 2
-child = 3
-properties_add = obj_var.properties_add
+# dependent on story file
+if file_name == path + 'zork1.z5':
+    obj_var = machine.memory.get_obj(1)
+    flags = [value % 2 for value in range(32)]
+    parent = 1
+    sibling = 2
+    child = 3
+    properties_add = obj_var.properties_add
 
-test_obj = Object(flags, parent, sibling, child, properties_add)
-machine.memory.set_obj(1, test_obj)
-test_obj = machine.memory.get_obj(1)
-assert (test_obj.flags == flags and 
-        test_obj.parent == parent and
-        test_obj.sibling == sibling and
-        test_obj.child == child and 
-        test_obj.properties_add == properties_add), "Error with set_obj(), get_obj()"
-print("set_obj(), get_obj() success")
+    test_obj = Object(flags, parent, sibling, child, properties_add)
+    machine.memory.set_obj(1, test_obj)
+    test_obj = machine.memory.get_obj(1)
+    assert (test_obj.flags == flags and 
+            test_obj.parent == parent and
+            test_obj.sibling == sibling and
+            test_obj.child == child and 
+            test_obj.properties_add == properties_add), "Error with set_obj(), get_obj()"
+    print("set_obj(), get_obj() success")
 
-pc = machine.cur_frame.get_pc()
-# stores child in top of routine stack
-machine.get_child(result=0, is_reversed=False, offset=3, obj=1)
-child = machine.pop()
-assert(child == test_obj.child), "Error in get_child(), child is " + str(child)
-new_pc = machine.cur_frame.get_pc()
-assert(pc + 1 == new_pc), "Error in branching"
-print("get_child() success")
+    pc = machine.cur_frame.get_pc()
+    # stores child in top of routine stack
+    machine.get_child(result=0, is_reversed=False, offset=3, obj=1)
+    child = machine.pop()
+    assert(child == test_obj.child), "Error in get_child(), child is " + str(child)
+    new_pc = machine.cur_frame.get_pc()
+    assert(pc + 1 == new_pc), "Error in branching"
+    print("get_child() success")
 
-pc = machine.cur_frame.get_pc()
-machine.get_sibling(result=0, is_reversed=False, offset=3, obj=1)
-sibling = machine.pop()
-assert(sibling == test_obj.sibling), "Error in get_sibling(), sibling is " + str(sibling)
-new_pc = machine.cur_frame.get_pc()
-assert(pc + 1 == new_pc), "Error in branching"
-print("get_sibling() success")
+    pc = machine.cur_frame.get_pc()
+    machine.get_sibling(result=0, is_reversed=False, offset=3, obj=1)
+    sibling = machine.pop()
+    assert(sibling == test_obj.sibling), "Error in get_sibling(), sibling is " + str(sibling)
+    new_pc = machine.cur_frame.get_pc()
+    assert(pc + 1 == new_pc), "Error in branching"
+    print("get_sibling() success")
 
-machine.get_parent(result=0, obj=1)
-parent = machine.pop()
-assert(parent == test_obj.parent), "Error in get_parent(), parent is " + str(parent)
-print("get_parent() success")
+    machine.get_parent(result=0, obj=1)
+    parent = machine.pop()
+    assert(parent == test_obj.parent), "Error in get_parent(), parent is " + str(parent)
+    print("get_parent() success")
 
 # dependent on story file
 if file_name == path + 'zork1.z5':
@@ -283,7 +286,7 @@ assert(temp == 8), "Error"
 print("dec() success")
 
 # Miscellaneous
-add = machine.memory.get_obj(247).properties_add
+add = machine.memory.get_obj(22).properties_add
 data = machine.memory.memory[add:add + 10]
 name = machine.memory.get_obj_name(add)
 result = machine.memory.get_prop_addr(add, 0)

@@ -56,13 +56,13 @@ def n(bot, update):
     
     if isStart == True:
         if game == None:        
-            update.message.reply_text('New game started, please choose a game')
+            update.message.reply_text('New game started')
             
-            #returns list of games available
-            path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
-            dirs = os.listdir(path)
-            for file in dirs:
-                update.message.reply_text(file)
+            # #returns list of games available
+            # path = './games'
+            # dirs = os.listdir(path)
+            # for file in dirs:
+            #     update.message.reply_text(file)
         else:
             update.message.reply_text('Sorry, you are already playing a game. /end '
                                       'to end current game')
@@ -121,22 +121,21 @@ def foo(bot, update):
     message = update.message.text
     if isStart == True:
         if game == None:
-            path = '/Users/kaizhe/Desktop/Telegram/ifbot/games/'
+            path = './games/'
             dirs = os.listdir(path)
-            if message in dirs:
-                sys.stdin = f
-                game = message
-                file_name = path + game
-                file = open(file_name, "rb")
-                machine = Interpreter(file, '')
-                try:
-                    machine.start(0)
-                except KeyboardInterrupt:
-                    update.message.reply_text(machine.o)
-                    sys.stdin = f1
-                except:
-                    sys.stdin = f1
-                    raise
+            sys.stdin = f
+            game = message
+            file_name = path + 'hhgg.z3'
+            file = open(file_name, "rb")
+            machine = Interpreter(file, '')
+            try:
+                machine.start(0)
+            except KeyboardInterrupt:
+                update.message.reply_text(machine.o)
+                sys.stdin = f1
+            except:
+                sys.stdin = f1
+                raise
         else:
             sys.stdin = f
             f.seek(0)

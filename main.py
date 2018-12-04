@@ -11,8 +11,7 @@ import logging
 import ifbot
 
 # Authentication token
-# NOT SAFE
-token = "568205953:AAHvWcHW_KrMuyEs28-PMjaYkRMVPGv8FCE"
+token = TELEGRAM_TOKEN
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

@@ -430,14 +430,11 @@ class Memory():
     # converts a hexadecimal number to base 10
     # may not be necessary
     def get_int(self, hexa, endian='default'):
-        # print ord(hexa)
         assert (type(hexa) == bytes), "hexa " + str(hexa) + " should be of type bytes"
         if endian == 'default':
-            num = 0 if hexa == b'' else ord(hexa) 
-            # num = int.from_bytes(hexa, byteorder=self.endian) # python3
+            num = int.from_bytes(hexa, byteorder=self.endian)
         elif endian == 'big' or endian == 'little':
-            raise Exception
-            # num = int.from_bytes(hexa, byteorder=order) # python3
+            num = int.from_bytes(hexa, byteorder=order)
         return num
     
     # joins multiple int elements

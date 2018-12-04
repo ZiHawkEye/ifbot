@@ -28,8 +28,9 @@ import sys
 
 class Interpreter():
     def __init__(self, file, o=None):
-        # where output is stored
+        # where input/output is stored
         self.o = o
+        self.i = ''
                 
         # represents story file/memory
         self.memory = Memory(file)
@@ -664,7 +665,7 @@ class Interpreter():
             try:
                 timer.start()
                 # stream = input() # python3 
-                stream = raw_input()
+                stream = self.i
             except KeyboardInterrupt:
                 # CHECK
                 # if result is zero vs non zero
@@ -672,7 +673,7 @@ class Interpreter():
             timer.cancel()    
         else:
             # stream = input() # python3
-            stream = raw_input()
+            stream = self.i
         stream = stream.lower()
         self.memory.read(baddr1, baddr2, stream)
         if not (self.ver_num in [5, 6] and baddr2 == 0):
@@ -842,18 +843,18 @@ class Interpreter():
 # End of Class
 # =============================================================================
 
-path = '/Users/kaizhe/Desktop/Web/Telegram/ifbot/games/'
+# path = '/Users/kaizhe/Desktop/Web/Telegram/ifbot/games/'
 
-# file_name = path + '905.z5'
-# file_name = path + 'zork1.z5'
-file_name = path + 'hhgg.z3'
-# file_name = path + 'dreamhold.z8'
+# # file_name = path + '905.z5'
+# # file_name = path + 'zork1.z5'
+# file_name = path + 'hhgg.z3'
+# # file_name = path + 'dreamhold.z8'
 
-file = open(file_name, "rb")
+# file = open(file_name, "rb")
 
-machine = Interpreter(file)
+# machine = Interpreter(file)
 
-try:
-    machine.start(0)
-except:
-    raise 
+# try:
+#     machine.start(0)
+# except:
+#     raise 

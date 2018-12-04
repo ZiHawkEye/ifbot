@@ -100,8 +100,8 @@ class Interpreter():
                 # pops routine stack
                 op = self.pop()
                 # UNDO
-                # if test == True:
-                #     print("op: " + str(op) + " var: " + str(var), end=' ')
+                if test == True:
+                    print("op: " + str(op) + " var: " + str(var), end=' ')
                 assert(op != 0 or opt != "var"), "Error"
             # data conversion for all operands
             if opt in ["bit", "byte",
@@ -128,17 +128,17 @@ class Interpreter():
             instr.operands[i] = op                    
 
         # UNDO
-        # if test == True:
-        #     print(instr.name, end=' ')
-        #     print('{0:02x}'.format(self.cur_frame.get_pc()), end=' ')
-        #     print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
+        if test == True:
+            print(instr.name, end=' ')
+            print('{0:02x}'.format(self.cur_frame.get_pc()), end=' ')
+            print('ops: ' + str(instr.operands) + " args: " + str(instr.arguments))
         # executes
         try:
             instr_function = getattr(self, instr.name)
         except AttributeError:
             raise NotImplementedError("Class `{}` does not implement `{}`".format(self.__class__.__name__, instr.name))
         # use * before an iterable to expand it before a function call
-        instr_function(*(instr.arguments + instr.operands))
+        instr_function(*instr.arguments, *instr.operands)
             
 # =============================================================================
 # Get Methods
@@ -249,11 +249,11 @@ class Interpreter():
     
     def div(self, result, s, t):
         # s and t are signed numbers
-        value = int(floor(s/t) % (0xffff))
+        value = floor(s/t) % (0xffff)
         self.store(result, value)
 
     def mod(self, result, s, t):
-        value = int((s - t * floor(s/t)) % (0xffff))
+        value = (s - t * floor(s/t)) % (0xffff)
         self.store(result, value)
 
     def inc(self, var):
@@ -663,16 +663,15 @@ class Interpreter():
             # read in char from current input stream (mouse not implemented)
             try:
                 timer.start()
-                # stream = input() # python3 
-                stream = raw_input()
+                stream = input()
             except KeyboardInterrupt:
                 # CHECK
                 # if result is zero vs non zero
                 self.call(raddr, result=result, ret="interrupt", n=0)
             timer.cancel()    
         else:
-            # stream = input() # python3
-            stream = raw_input()
+            stream = input()
+
         stream = stream.lower()
         self.memory.read(baddr1, baddr2, stream)
         if not (self.ver_num in [5, 6] and baddr2 == 0):
@@ -705,8 +704,7 @@ class Interpreter():
             if self.o != None:
                 self.o = self.o + string
             else:
-                print string,
-                # print(string, end="") # python3
+                print(string, end="")
         elif self.ostream[2] == True:
             print("Reading to memory")
 

@@ -1,0 +1,28 @@
+# application: ifbot-221407
+# version: 1
+runtime: python27
+api_version: 1
+threadsafe: yes
+
+handlers:
+- url: /favicon\.ico
+  static_files: favicon.ico
+  upload: favicon\.ico
+
+- url: /hhgg.z3
+  static_files: hhgg.z3
+  upload: /hhgg.z3
+  application_readable: true
+
+- url: /set_webhook
+  login: admin
+  script: main.app
+
+- url: .*
+  script: main.app
+
+libraries:
+- name: webapp2
+  version: "2.5.2"
+- name: PIL
+  version: latest
